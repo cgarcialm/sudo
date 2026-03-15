@@ -46,16 +46,17 @@ Sudo has a 16×16 pixel screen it can paint however it wants.
 - Screen persists between replies; Sudo repaints as part of every reply ✅
 - `run.sh` is the canonical way to run Sudo (user and tests share it) ✅
 
-### Phase 4b: SVG Screen + Autonomous Expression
+### Phase 4b: SVG Screen + Autonomous Expression ✅
 Replace the 16×16 pixel grid with SVG — fewer tokens, more expressive, scales to any resolution.
 Sudo also gets two independent output channels and learns about both through its system prompt.
 
-- **SVG rendering**: replace pixel grid with SVG output; render via `cairosvg` + pygame
-- **Two output channels**:
+- **SVG rendering**: replace pixel grid with SVG output; render via `cairosvg` + pygame ✅
+- **Eager display init**: pygame window opens immediately at startup, background event-pump thread keeps it alive ✅
+- **Two output channels**: ✅
   - Conversation reply (text, optionally includes `<screen><svg>...</svg></screen>`)
   - Autonomous expression loop: background thread wakes every N seconds, asks Sudo "do you want to express something?", renders SVG if yes
-- **System prompt update**: tell Sudo what it is (Pi robot), that it has a physical screen, and that it has both channels available — Sudo learns its own capabilities through context, not hardcoded behavior
-- Loops are independent — conversation never blocks expression and vice versa
+- **System prompt update**: tell Sudo what it is (Pi robot), that it has a physical screen, and that it has both channels available — Sudo learns its own capabilities through context, not hardcoded behavior ✅
+- Loops are independent — conversation never blocks expression and vice versa ✅
 
 ### Phase 5: Vision
 Camera input sent to Claude.
