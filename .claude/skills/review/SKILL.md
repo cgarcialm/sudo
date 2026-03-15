@@ -27,3 +27,4 @@ Review the target file(s) against the Sudo coding standards defined in `docs/COD
 5. Fix all linter and formatter issues automatically
 6. Report any structural or standards violations and ask before changing them
 7. Check that `docs/ARCHITECTURE.md` and `docs/PLAN.md` reflect any decisions made in the implementation — flag any discrepancies and update them
+8. Check `tests/test_docker.py` — does it reflect what the system actually does on the Pi right now? If the implementation changed the system's behaviour or entrypoint, flag it as a gap and require it to be addressed before committing

@@ -56,9 +56,10 @@ def test_something(mock_anthropic):
    - Full output for any failures
 7. If tests fail due to a bug in the tests themselves, fix the tests
 8. If tests fail due to a bug in the source code, report it and ask before changing anything
-9. **Docker integration test** — always run this:
+9. **Docker integration test** — this is the most important test: it exercises the system as it will actually run on the Pi.
+   - Ask: **what does a user do with the system on the Pi right now?** That interaction is what the Docker test must cover end-to-end.
+   - Review `tests/test_docker.py` — if it doesn't reflect the current system behaviour (e.g. a new entrypoint was added, the interaction model changed), update it before running.
+   - The mock server in `conftest.py` stands in for the real Anthropic API — pipe real stdin, check real stdout, verify the full flow works inside the container.
    - Build the image: `docker build --platform linux/arm64 -t sudo .`
-   - Run pytest with the Docker integration test (uses `mock_anthropic_server` fixture from `conftest.py` — starts and stops the mock server automatically):
-     - On Mac: `pytest tests/test_docker.py -v`
-     - On Linux (CI): `pytest tests/test_docker.py -v`
-   - Verify it prints a response and exits cleanly
+   - Run: `pytest tests/test_docker.py -v`
+   - Verify the test covers the actual user interaction, not just "exits cleanly"
