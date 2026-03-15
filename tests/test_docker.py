@@ -65,10 +65,11 @@ def test_screen_tag_stripped_from_output(mock_anthropic_server):
 
 
 def test_memory_written_after_session(mock_anthropic_server):
-    """history.json and identity.md are written to the mounted memory volume."""
+    """history.json, identity.md, and summaries.json are written to the mounted memory volume."""
     with tempfile.TemporaryDirectory(dir="/tmp") as tmp_dir:
         result = _run_sudo([], stdin="hello\nexit\n", memory_dir=tmp_dir)
 
         assert result.returncode == 0
         assert pathlib.Path(tmp_dir, "history.json").exists()
         assert pathlib.Path(tmp_dir, "identity.md").exists()
+        assert pathlib.Path(tmp_dir, "summaries.json").exists()
