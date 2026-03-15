@@ -51,3 +51,8 @@ def test_something(mock_anthropic):
    - Full output for any failures
 7. If tests fail due to a bug in the tests themselves, fix the tests
 8. If tests fail due to a bug in the source code, report it and ask before changing anything
+9. **Docker integration test** — if the changes affect code that runs inside the container:
+   - Start the mock server: `python tests/mock_anthropic_server.py &`
+   - Build the image: `docker build --platform linux/arm64 -t sudo .`
+   - Run the container against the mock: `docker run --rm --network host -e ANTHROPIC_API_KEY=test-key -e ANTHROPIC_BASE_URL=http://localhost:8765 sudo`
+   - Verify it prints a response and exits cleanly
