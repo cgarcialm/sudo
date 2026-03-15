@@ -151,11 +151,14 @@ def test_parse_reply_trims_whitespace():
 
 
 @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+@patch("chat.save_history")
+@patch("chat.load_identity", return_value=None)
+@patch("chat.load_history", return_value=[])
 @patch("chat.reflect_and_update_identity")
 @patch("chat.ScreenRenderer")
 @patch("chat.anthropic.Anthropic")
 def test_run_chat_renders_grid_from_reply(
-    mock_anthropic, mock_renderer_cls, _mock_reflect
+    mock_anthropic, mock_renderer_cls, _mock_reflect, _mock_load_hist, _mock_load_id, _mock_save
 ):
     """run_chat passes the parsed grid to renderer.render()."""
     grid = [["#ff0000"] * 16 for _ in range(16)]
