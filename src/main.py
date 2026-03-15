@@ -2,13 +2,15 @@ import os
 
 import anthropic
 
+from config import MODEL as _MODEL
+
 
 def ask_claude(prompt):
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
     try:
         message = client.messages.create(
-            model="claude-sonnet-4-6",
+            model=_MODEL,
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}],
         )

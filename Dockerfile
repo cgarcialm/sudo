@@ -9,4 +9,4 @@ COPY . .
 
 VOLUME /app/memory
 
-CMD ["python", "chat.py"]
+CMD ["python", "src/chat.py"]
