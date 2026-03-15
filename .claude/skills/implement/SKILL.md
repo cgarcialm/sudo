@@ -4,7 +4,7 @@ description: Read the plan, propose what to implement next, implement it when co
 allowed-tools: Bash, Read, Glob, Grep, Write, Edit
 ---
 
-Start by reading `HANDOFF.md` if it exists — it contains the current state of the project and next steps from the previous session.
+Start by reading `.claude/HANDOFF.md` if it exists — it contains the current state of the project and next steps from the previous session.
 
 You are implementing the next step of the Sudo project. Follow these steps in order:
 
@@ -88,7 +88,7 @@ Present the proposed changes clearly:
 Once confirmed, apply the changes.
 
 ### 13. Write handoff
-Write `HANDOFF.md` at the project root. The next session has no memory of this conversation — write everything needed to continue without context. Include:
+Write `.claude/HANDOFF.md`. The next session has no memory of this conversation — write everything needed to continue without context. Include:
 - **Goal** — what this session set out to do
 - **What was tried** — approaches taken
 - **What worked** — what's now in place and why
