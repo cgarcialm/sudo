@@ -28,7 +28,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt pytest pytest-mock
-      - run: pytest tests/ -v
+      - run: pytest tests/ -v --ignore=tests/test_docker.py
 
   docker:
     name: docker
@@ -47,16 +47,7 @@ jobs:
       - name: Build image
         run: docker build --platform linux/arm64 -t sudo .
 
-      - name: Start mock Anthropic server
+      - name: Run Docker integration tests
         run: |
-          pip install anthropic
-          python tests/mock_anthropic_server.py &
-          sleep 1
-
-      - name: Run container against mock server
-        run: |
-          docker run --rm \
-            --network host \
-            -e ANTHROPIC_API_KEY=test-key \
-            -e ANTHROPIC_BASE_URL=http://localhost:8765 \
-            sudo
+          pip install -r requirements.txt pytest
+          pytest tests/test_docker.py -v
