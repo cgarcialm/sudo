@@ -58,3 +58,4 @@ def test_something(mock_anthropic):
      - On Mac: `docker run --rm -e ANTHROPIC_API_KEY=test-key -e ANTHROPIC_BASE_URL=http://host.docker.internal:8765 sudo`
      - On Linux (CI): `docker run --rm --network host -e ANTHROPIC_API_KEY=test-key -e ANTHROPIC_BASE_URL=http://localhost:8765 sudo`
    - Verify it prints a response and exits cleanly
+   - Kill the mock server: `pkill -f mock_anthropic_server.py`
