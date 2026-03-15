@@ -19,48 +19,71 @@ flowchart LR
 
 ## Phase 2: Chat
 
-Pi runs a web server. You chat with Sudo from a browser.
+You chat with Sudo from a terminal. Conversation history persists for the session.
 
 ```mermaid
 flowchart LR
-    User["Your Phone / Mac\n(browser)"]
+    User["Terminal\n(chat.py)"]
 
     subgraph Pi["Raspberry Pi"]
-        Server["FastAPI Server"]
-        History["Conversation History"]
-        Server <--> History
+        Chat["chat.py\nREPL loop"]
+        History["Conversation History\n(in-memory)"]
+        Chat <--> History
     end
 
-    User -->|http://sudo.local| Server
-    Server -->|HTTPS| API["Anthropic API"]
+    User -->|input| Chat
+    Chat -->|HTTPS| API["Anthropic API"]
     API --> Claude
-    Claude -->|text response| Server
+    Claude -->|text response| Chat
+    Chat -->|reply| User
 ```
 
-Remote access outside home network: TBD
+## Phase 3: Persistence
 
-## Phase 3: Face
+Sudo's memory and identity survive across sessions. Both are written to disk and loaded at startup.
+
+```mermaid
+flowchart LR
+    User["Terminal\n(chat.py)"]
+
+    subgraph Pi["Raspberry Pi"]
+        Chat["chat.py"]
+        subgraph Memory["memory/"]
+            History["history.json\n(last N turns)"]
+            Identity["identity.md\n(Sudo's self-concept)"]
+        end
+    end
+
+    Memory -->|load at startup| Chat
+    User -->|input| Chat
+    Chat -->|HTTPS| API["Anthropic API"]
+    API --> Claude
+    Claude -->|reply| Chat
+    Chat -->|reflect + update on exit| Memory
+```
+
+## Phase 4: Face (pushed from Phase 3)
 
 Claude decides Sudo's emotion, rendered on screen.
 
 ```mermaid
 flowchart LR
-    User["Your Phone / Mac\n(browser)"]
+    User["Terminal\n(chat.py)"]
 
     subgraph Pi["Raspberry Pi"]
-        Server["FastAPI Server"]
+        Chat["chat.py"]
         Face["Face Renderer"]
     end
 
-    User -->|http://sudo.local| Server
-    Server -->|HTTPS| API["Anthropic API"]
+    User -->|input| Chat
+    Chat -->|HTTPS| API["Anthropic API"]
     API --> Claude
-    Claude -->|text + emotion| Server
-    Server --> Face
+    Claude -->|text + emotion| Chat
+    Chat --> Face
     Face --> Screen
 ```
 
-## Phase 4: Vision
+## Phase 5: Vision (pushed from Phase 4)
 
 Camera frames are sent to Claude. Claude can now see.
 
@@ -77,7 +100,7 @@ flowchart LR
     Claude -->|response| Pi
 ```
 
-## Phase 5: Autonomy
+## Phase 6: Autonomy (pushed from Phase 5)
 
 You give Sudo a goal. Claude navigates using the camera.
 

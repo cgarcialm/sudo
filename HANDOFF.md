@@ -1,36 +1,48 @@
-# Handoff — Phase 1 Foundation
+# Handoff — Phase 2 Terminal Chat
 
 ## Goal
-Set up a working Docker environment on Mac (ARM64) that connects to the Claude API, proving the foundation before the Pi arrives.
+Build Phase 2: text-based conversation with Sudo via terminal with persistent session history.
 
 ## What was tried
-- Used `--env-file .env` to pass the API key to Docker
-- Attempted to use the API key immediately after adding credits — failed due to a $0 monthly spend limit
-- Tested via Workbench to isolate whether the account or the key was the issue
-- Created a new API key after the original showed "Never used"
+- Originally proposed a web UI (FastAPI + HTML) — user preferred terminal
+- Switched to a simple terminal REPL in `chat.py`
 
 ## What worked
-- ARM64 Docker container builds and runs correctly on Mac
-- Claude API responds successfully from inside the container
-- New API key fixed the auth issue once the monthly spend limit was set to $5
-- `main.py` refactored into a function with proper error handling and entry point
+- `chat.py` — interactive loop with `send_message()` passing full history each turn
+- 5 tests in `tests/test_chat.py` covering reply, history mutation, multi-turn, system prompt, and API errors
+- 2 Docker integration tests in `tests/test_docker.py` — single-turn and multi-turn inside ARM64 container with mock API
+- Added `.flake8` config file — flake8 doesn't read `pyproject.toml`
+- Sudo has its own evolving personality (not an assistant) — system prompt lets Claude define it
+- Manual multi-turn test confirmed history works across turns in the same session
 
 ## What failed
-- Original API key never worked (spend limit was $0, blocking all calls)
-- `.claude/skills/` path for custom skills didn't work until Claude Code was restarted
+- Original system prompt said "friendly assistant" — Claude kept defaulting to assistant behaviour until prompt was rewritten
+- Docker test was initially missing for `chat.py` — caught during review loop
+
+## Skills improved this session
+- `implement` — test before review, loop back on any gap including user feedback, wait for PR merge
+- `review` — check docs consistency and Docker test coverage
+- `test` — Docker test must cover what the system actually does on the Pi, not just "exits cleanly"
 
 ## What's in place
-- `Dockerfile` — ARM64/Linux container targeting Pi architecture
-- `main.py` — `ask_claude(prompt)` function, standards-compliant
-- `requirements.txt` — `anthropic`, `black`, `flake8`
-- `pyproject.toml` — black + flake8 config
-- `docs/PLAN.md` — 5-phase plan, Phase 1 marked complete (Pi deploy pending)
-- `docs/ARCHITECTURE.md` — Mermaid diagrams per phase
-- `docs/CODING_STANDARDS.md` — Python standards for the project
-- `.claude/skills/test/` — `/test` skill: writes and runs pytest tests with mocked API
-- `.claude/skills/review/` — `/review` skill: lints and checks standards
-- `.claude/skills/implement/` — `/implement` skill: full propose → build → review → test → commit → PR → handoff loop
+- `chat.py` — `send_message()` + `run_chat()` REPL, Sudo's own personality
+- `tests/test_chat.py` — 5 unit tests
+- `tests/test_docker.py` — 2 Docker integration tests (single + multi-turn)
+- `.flake8` — flake8 config
+- `docs/PLAN.md` — Phase 2 complete, Phase 3 (Persistence) added, Phases 4–6 renumbered
+- `docs/ARCHITECTURE.md` — all phases updated
 
-## Next steps
-1. **Phase 2: Chat** — build FastAPI server with conversation history, browser UI at `http://sudo.local` — use `/implement` to drive this
-2. **Pi arrives** — clone repo, run same Docker setup, verify API call works on Pi (can happen in parallel)
+## Next steps (Phase 3: Persistence)
+Sudo remembers past conversations and genuinely evolves over time. Two files on disk:
+
+1. **`memory/history.json`** — rolling window of last N conversation turns, loaded at startup and appended each session
+2. **`memory/identity.md`** — Sudo's self-concept: personality traits, opinions, observations — written and updated by Sudo itself at the end of each session via a reflection call to Claude
+
+Implementation order:
+1. Load/save `history.json` on startup/exit — rolling window (last 50 messages)
+2. Create `identity.md` on first run via a Claude call ("who are you?"), inject into system prompt
+3. On `exit`, Sudo reflects on the session and updates `identity.md` autonomously
+4. Add Docker volume mount in dev so memory survives container restarts
+5. Compress `identity.md` when it exceeds a size threshold (Sudo decides what to keep)
+
+**Note:** SD card not yet arrived — Pi deploy still pending. All dev on Mac via Docker.

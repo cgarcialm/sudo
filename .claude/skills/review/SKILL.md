@@ -26,3 +26,5 @@ Review the target file(s) against the Sudo coding standards defined in `docs/COD
    - Comments only where logic isn't self-evident
 5. Fix all linter and formatter issues automatically
 6. Report any structural or standards violations and ask before changing them
+7. Check that `docs/ARCHITECTURE.md` and `docs/PLAN.md` reflect any decisions made in the implementation — flag any discrepancies and update them. The next session has no memory of this conversation, so docs must reflect the current truth without relying on context from the chat.
+8. Check `tests/test_docker.py` — does it reflect what the system actually does on the Pi right now? If the implementation changed the system's behaviour or entrypoint, flag it as a gap and require it to be addressed before committing
