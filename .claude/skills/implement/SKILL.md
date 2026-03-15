@@ -34,7 +34,9 @@ Once confirmed, implement the proposed changes following `docs/CODING_STANDARDS.
 ### 5. Test
 - Check if tests exist in `tests/` for the changed files
 - If not, write them following the standards in `.claude/skills/test/SKILL.md`
-- Run `pytest tests/ -v`
+- Run `pytest tests/ -v --ignore=tests/test_docker.py`
+- Rebuild the Docker image: `docker build -t sudo .`
+- Run `pytest tests/test_docker.py -v`
 - Fix any test failures
 
 ### 6. Review
