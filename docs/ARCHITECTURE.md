@@ -66,23 +66,35 @@ flowchart LR
 
 Every reply includes a 16×16 pixel grid Sudo paints however it wants. Rendered live via pygame; saved as `memory/screen.png`.
 
+## Phase 4b: SVG Screen + Autonomous Expression ✅
+
+Replaces the pixel grid with SVG. Sudo has two independent output channels: conversation replies (optionally with `<screen><svg>…</svg></screen>`) and an autonomous expression loop that invites Sudo to draw every 30 seconds. The pygame window opens immediately at startup.
+
 ```mermaid
 flowchart LR
     User["Terminal\n(chat.py)"]
 
     subgraph Pi["Raspberry Pi"]
-        Chat["chat.py"]
+        subgraph Threads["chat.py"]
+            Main["Main thread\n(event loop + chat)"]
+            InputT["Input thread\n(reads stdin)"]
+            ExprT["Expression thread\n(every 30s)"]
+        end
         Screen["ScreenRenderer\n(screen.py)"]
         PNG["memory/screen.png"]
     end
 
-    User -->|input| Chat
-    Chat -->|HTTPS| API["Anthropic API"]
+    InputT -->|queued line| Main
+    Main -->|HTTPS stream| API["Anthropic API"]
     API --> Claude
-    Claude -->|"text + &lt;screen&gt; JSON grid"| Chat
-    Chat -->|16×16 hex grid| Screen
-    Screen --> Window["pygame window"]
+    Claude -->|"text + optional &lt;screen&gt;&lt;svg&gt;"| Main
+    Main -->|svg string| Screen
+    ExprT -->|HTTPS| API
+    Claude -->|"optional &lt;screen&gt;&lt;svg&gt;"| ExprT
+    ExprT -->|svg string| Screen
+    Screen -->|cairosvg + blit| Window["pygame window"]
     Screen --> PNG
+    Main -->|tick 20×/sec| Screen
 ```
 
 ## Phase 5: Vision

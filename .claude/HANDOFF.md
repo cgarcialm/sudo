@@ -1,48 +1,39 @@
-# Handoff — Phase 4 Screen (complete)
+# Handoff — Phase 4b SVG Screen (complete)
 
 ## Goal
-Give Sudo a 16×16 pixel screen it owns and paints however it wants as part of every reply.
+Replace the 16×16 pixel grid with SVG output and give Sudo two independent output channels —
+conversation replies and autonomous visual expression — both learned through the system prompt.
 
-## What was tried
-- `screen.py` module with a `ScreenRenderer`, wired into `chat.py`
-- `run.sh` script so user and tests share the same Docker run command
-- Docker build automated as a pytest session fixture
-- Streaming added so text appears immediately; `<screen>` block moved to end of reply
-- Image save: `memory/screen.png` written after every render
+## What was implemented
+- `src/screen.py` — `ScreenRenderer` opens the pygame window immediately at startup. `tick()` pumps pygame events from the main thread (required on macOS — background thread approach doesn't work with Cocoa). `render(svg_string)` uses `cairosvg` to convert SVG → PNG bytes → blit to pygame surface. cairosvg import catches `(ImportError, OSError)` to handle missing system library gracefully.
+- `src/chat.py` — `parse_reply()` returns `(text, svg_string)`. System prompt tells Sudo about its two output channels. `_expression_loop()` daemon thread wakes every `EXPRESSION_INTERVAL_SECONDS`, sends quiet moment prompt, renders SVG if returned. `run_chat()` moves `input()` to a background thread so the main thread can run the pygame event loop via `renderer.tick()` every 50ms.
+- `src/config.py` — `SCREEN_SIZE = 320`, `EXPRESSION_INTERVAL_SECONDS = 30`, `MAX_TOKENS_EXPRESSION = 512`
+- `src/memory.py` — fixed `load_identity()` TOCTOU: `p.exists()` → `try/except FileNotFoundError`
+- `requirements.txt` — added `cairosvg`
+- `Dockerfile` — added `libcairo2` system package
+- `dev.sh` — local dev script: `uv run python src/chat.py` with `PYTHONPATH=src`
+- `tests/mock_anthropic_server.py` — updated to support streaming SSE and return SVG response
+- `tests/test_chat.py`, `tests/test_screen.py` — updated for SVG format, eager init, tick()
 
-## What worked
-- `screen.py` — `ScreenRenderer` lazy-inits pygame; silently skips if no display (Docker/headless); `pygame.event.pump()` required on macOS or window never appears
-- `chat.py` — `_stream_reply()` streams text to terminal, suppresses `<screen>` block; `parse_reply()` extracts grid after full response; stores only text in history; `_MODEL` and `_MAX_TOKENS` are module-level constants shared by both API call sites
-- `run.sh` — canonical run script; `MEMORY_DIR` env var overrides memory mount; tests set it to a temp dir
-- `tests/conftest.py` — `docker_image` session fixture auto-builds before Docker tests; surfaces stderr on failure
-- `.flake8` — `.venv` excluded so flake8 doesn't lint installed packages
-- `memory/screen.png` — saved after each render; open with `open memory/screen.png`
-- `.venv/` — local venv via `uv venv && uv pip install -r requirements.txt`
+## How to run locally (mock server, no API key)
+```bash
+# Terminal 1
+uv run python tests/mock_anthropic_server.py
 
-## What failed
-- pygame window on macOS didn't appear without `pygame.event.pump()` — added after `pygame.display.flip()`
-- `<screen>` block was leaking to terminal — fixed by moving it to end of reply and suppressing it in the streaming loop
-- `max_tokens=1024` too low for grid JSON + reply — raised to 2048 (now `_MAX_TOKENS`)
+# Terminal 2
+ANTHROPIC_API_KEY=test-key ANTHROPIC_BASE_URL=http://localhost:8765 ./dev.sh
+```
 
-## What's in place
-- `screen.py` — `ScreenRenderer`: `render(grid)`, `save(path)`, `stop()`
-- `chat.py` — `parse_reply()`, `SCREEN_PROMPT`, `_stream_reply()`, `_MODEL`, `_MAX_TOKENS`
-- `run.sh` — `./run.sh` to run interactively; `ANTHROPIC_API_KEY` required
-- `memory/screen.png` — latest screen state, saved each reply
-- `docs/ARCHITECTURE.md` — updated with Phase 4 screen diagram, Phase 6 Body, Phase 7 Autonomy
-- `docs/PLAN.md` — Phase 4 ✅, Phase 6 Body added, Phase 7 Autonomy
-
-## Plan update
-Phase ordering updated based on conversation with Cecilia:
-- Phase 5: Vision (camera)
-- Phase 6: Body (cheap local sensors — audio, light, temperature, time — preprocessed on Pi, sent as text summaries to keep token cost low)
-- Phase 7: Autonomy (movement)
-
-Principle for Phase 6: process locally, send summaries not raw data.
-Sensors to add: BH1750 (ambient light), DHT22 (temperature), microphone with local audio classifier.
+## How to run on Pi
+```bash
+ssh sudo@raspberry.local
+cd sudo && git pull
+pip install cairosvg --break-system-packages  # first time only
+DISPLAY=:0 python src/chat.py
+```
 
 ## Next steps (Phase 5: Vision)
-1. Add `camera.py` — capture and compress frames (320×240) using `picamera2` or `opencv`
+1. Add `src/camera.py` — capture and compress frames (320×240) using `picamera2` or `opencv`
 2. Encode frame as base64, include in message as image content block
 3. Update `_stream_reply` (or `send_message`) to optionally attach an image
 4. Update system prompt to tell Sudo it can see

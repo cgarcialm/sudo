@@ -1,4 +1,5 @@
 anthropic
 black
+cairosvg
 flake8
 pygame

@@ -1,12 +1,11 @@
 import io
-import json
 import os
 from unittest.mock import MagicMock, patch
 
 import anthropic
 import pytest
 
-from chat import SYSTEM_PROMPT, parse_reply, send_message
+from chat import SYSTEM_PROMPT, _expression_loop, parse_reply, send_message
 
 
 @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
@@ -19,10 +18,10 @@ def test_send_message_returns_reply(mock_anthropic):
     )
 
     history = []
-    text, grid = send_message(mock_client, history, "Hello")
+    text, svg = send_message(mock_client, history, "Hello")
 
     assert text == "Hello, I'm Sudo!"
-    assert grid is None
+    assert svg is None
 
 
 @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
@@ -94,8 +93,8 @@ def test_send_message_raises_on_api_error(mock_anthropic):
 @patch("chat.anthropic.Anthropic")
 def test_send_message_strips_screen_from_history(mock_anthropic):
     """Screen data is not stored in history — only the text reply."""
-    grid_json = json.dumps([["#000000"] * 16 for _ in range(16)])
-    raw = f"<screen>{grid_json}</screen>\nHello!"
+    svg = "<svg><rect width='10' height='10'/></svg>"
+    raw = f"Hello!\n<screen>{svg}</screen>"
     mock_client = MagicMock()
     mock_anthropic.return_value = mock_client
     mock_client.messages.create.return_value = MagicMock(content=[MagicMock(text=raw)])
@@ -108,63 +107,104 @@ def test_send_message_strips_screen_from_history(mock_anthropic):
 
 @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
 @patch("chat.anthropic.Anthropic")
-def test_send_message_returns_grid_when_present(mock_anthropic):
-    grid = [["#ff0000"] * 16 for _ in range(16)]
-    raw = f"<screen>{json.dumps(grid)}</screen>\nRed screen."
+def test_send_message_returns_svg_when_present(mock_anthropic):
+    svg = "<svg><rect width='10' height='10'/></svg>"
+    raw = f"<screen>{svg}</screen>\nRed screen."
     mock_client = MagicMock()
     mock_anthropic.return_value = mock_client
     mock_client.messages.create.return_value = MagicMock(content=[MagicMock(text=raw)])
 
     history = []
-    text, returned_grid = send_message(mock_client, history, "Hi")
+    text, returned_svg = send_message(mock_client, history, "Hi")
 
     assert text == "Red screen."
-    assert returned_grid == grid
+    assert returned_svg == svg
 
 
 def test_parse_reply_returns_text_and_none_when_no_screen_tag():
-    text, grid = parse_reply("Hello there!")
+    text, svg = parse_reply("Hello there!")
     assert text == "Hello there!"
-    assert grid is None
+    assert svg is None
 
 
-def test_parse_reply_extracts_grid_and_strips_screen_tag():
-    grid = [["#abcdef"] * 16 for _ in range(16)]
-    raw = f"<screen>{json.dumps(grid)}</screen>\nSome reply."
-    text, returned_grid = parse_reply(raw)
+def test_parse_reply_extracts_svg_and_strips_screen_tag():
+    svg = "<svg><circle cx='50' cy='50' r='40'/></svg>"
+    raw = f"<screen>{svg}</screen>\nSome reply."
+    text, returned_svg = parse_reply(raw)
     assert text == "Some reply."
-    assert returned_grid == grid
+    assert returned_svg == svg
 
 
-def test_parse_reply_when_invalid_json_in_screen_tag():
-    raw = "<screen>not valid json</screen>\nHello."
-    text, grid = parse_reply(raw)
+def test_parse_reply_returns_none_when_screen_tag_is_empty():
+    raw = "<screen></screen>\nHello."
+    text, svg = parse_reply(raw)
     assert text == "Hello."
-    assert grid is None
+    assert svg is None
 
 
 def test_parse_reply_trims_whitespace():
     raw = "  Plain reply with spaces.  "
-    text, grid = parse_reply(raw)
+    text, svg = parse_reply(raw)
     assert text == "Plain reply with spaces."
-    assert grid is None
+    assert svg is None
+
+
+class _Stop(BaseException):
+    pass
+
+
+@patch("chat.time.sleep", side_effect=[None, _Stop()])
+def test_expression_loop_renders_svg_when_returned(mock_sleep):
+    svg = "<svg><rect width='10' height='10'/></svg>"
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text=f"<screen>{svg}</screen>")]
+    )
+    mock_renderer = MagicMock()
+
+    with pytest.raises(_Stop):
+        _expression_loop(mock_client, mock_renderer, "system")
+
+    mock_renderer.render.assert_called_once_with(svg)
+    mock_renderer.save.assert_called_once()
+
+
+@patch("chat.time.sleep", side_effect=[None, _Stop()])
+def test_expression_loop_skips_render_when_no_svg(mock_sleep):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(content=[MagicMock(text="")])
+    mock_renderer = MagicMock()
+
+    with pytest.raises(_Stop):
+        _expression_loop(mock_client, mock_renderer, "system")
+
+    mock_renderer.render.assert_not_called()
 
 
 @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+@patch("chat.save_history")
+@patch("chat.load_identity", return_value=None)
+@patch("chat.load_history", return_value=[])
 @patch("chat.reflect_and_update_identity")
+@patch("chat._expression_loop")
 @patch("chat.ScreenRenderer")
 @patch("chat.anthropic.Anthropic")
-def test_run_chat_renders_grid_from_reply(
-    mock_anthropic, mock_renderer_cls, _mock_reflect
+def test_run_chat_renders_svg_from_reply(
+    mock_anthropic,
+    mock_renderer_cls,
+    _mock_expression_loop,
+    _mock_reflect,
+    _mock_load_hist,
+    _mock_load_id,
+    _mock_save,
 ):
-    """run_chat passes the parsed grid to renderer.render()."""
-    grid = [["#ff0000"] * 16 for _ in range(16)]
-    raw = f"Hello!\n<screen>{json.dumps(grid)}</screen>"
+    """run_chat passes the parsed SVG to renderer.render()."""
+    svg = "<svg><rect width='10' height='10'/></svg>"
+    raw = f"Hello!\n<screen>{svg}</screen>"
 
     mock_client = MagicMock()
     mock_anthropic.return_value = mock_client
 
-    # Simulate streaming: stream context manager yields chunks of raw
     mock_stream = MagicMock()
     mock_stream.__enter__ = lambda s: s
     mock_stream.__exit__ = MagicMock(return_value=False)
@@ -180,4 +220,4 @@ def test_run_chat_renders_grid_from_reply(
         with patch("sys.stdout", new_callable=io.StringIO):
             run_chat()
 
-    mock_renderer.render.assert_called_once_with(grid)
+    mock_renderer.render.assert_called_once_with(svg)

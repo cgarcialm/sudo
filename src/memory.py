@@ -44,10 +44,10 @@ def save_history(history, path=HISTORY_PATH, max_turns=MAX_HISTORY_TURNS):
 
 def load_identity(path=IDENTITY_PATH):
     """Load Sudo's identity file. Returns None if missing."""
-    p = pathlib.Path(path)
-    if not p.exists():
+    try:
+        return pathlib.Path(path).read_text()
+    except FileNotFoundError:
         return None
-    return p.read_text()
 
 
 def save_identity(text, path=IDENTITY_PATH):
