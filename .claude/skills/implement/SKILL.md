@@ -60,7 +60,18 @@ Update `docs/PLAN.md` to reflect what was just completed:
 - Create a PR using `gh pr create` with a summary of what was implemented and a test plan
 - Return the PR URL
 
-### 9. Write handoff
+### 9. Update skills
+Review what was learned during this session — things that worked well, things that were painful, patterns that emerged — and propose improvements to any of the skills in `.claude/skills/`.
+
+Present the proposed changes clearly:
+- Which skill(s) to update
+- What to change and why
+
+**Stop and wait for confirmation before editing any skill files.**
+
+Once confirmed, apply the changes.
+
+### 10. Write handoff
 Write `HANDOFF.md` at the project root with:
 - **Goal** — what this session set out to do
 - **What was tried** — approaches taken
