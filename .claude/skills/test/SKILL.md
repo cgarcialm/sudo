@@ -43,7 +43,7 @@ def test_something(mock_anthropic):
 
 1. Read the target file(s) — if `$ARGUMENTS` is provided use that, otherwise use `git diff --name-only` to find changed files
 2. Identify what needs testing: functions, classes, edge cases, error handling
-3. Check if a test file already exists in `tests/` — add to it if so, create it if not
+3. Check if a test file already exists in `tests/` — if so, review it for gaps (missing edge cases, uncovered functions, weak assertions) and add to it; otherwise create it
 4. Write the tests following the standards above
 5. Install any missing test dependencies (`pip install pytest pytest-mock` if needed)
 6. Run `pytest tests/ -v` and report results:
@@ -51,8 +51,10 @@ def test_something(mock_anthropic):
    - Full output for any failures
 7. If tests fail due to a bug in the tests themselves, fix the tests
 8. If tests fail due to a bug in the source code, report it and ask before changing anything
-9. **Docker integration test** — if the changes affect code that runs inside the container:
-   - Start the mock server: `python tests/mock_anthropic_server.py &`
+9. **Docker integration test** — always run this:
+   - Start the mock server: `python3 tests/mock_anthropic_server.py &`
    - Build the image: `docker build --platform linux/arm64 -t sudo .`
-   - Run the container against the mock: `docker run --rm --network host -e ANTHROPIC_API_KEY=test-key -e ANTHROPIC_BASE_URL=http://localhost:8765 sudo`
+   - Run the container against the mock:
+     - On Mac: `docker run --rm -e ANTHROPIC_API_KEY=test-key -e ANTHROPIC_BASE_URL=http://host.docker.internal:8765 sudo`
+     - On Linux (CI): `docker run --rm --network host -e ANTHROPIC_API_KEY=test-key -e ANTHROPIC_BASE_URL=http://localhost:8765 sudo`
    - Verify it prints a response and exits cleanly
