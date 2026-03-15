@@ -21,13 +21,11 @@ ARM64 Docker environment working on Mac, ready to deploy to Pi when it arrives.
 - Basic API call works from inside Docker ✅
 - Deploy and verify on Pi (pending — Pi arriving soon)
 
-### Phase 2: Chat
-Text-based conversation with Sudo via web UI.
-- FastAPI server running on the Pi
-- Simple browser UI accessible at `http://sudo.local` on local network
-- Conversation history maintained for the session
-- Optional: Tailscale or ngrok for remote access outside home network
-- Voice (Whisper STT + TTS) added later when needed
+### Phase 2: Chat ✅
+Text-based conversation with Sudo via terminal.
+- Terminal REPL (`chat.py`) ✅
+- Conversation history maintained for the session ✅
+- System prompt sets Sudo's personality ✅
 
 ### Phase 3: Face
 Animated face UI on the screen.
