@@ -53,6 +53,16 @@ class ScreenRenderer:
                     ),
                 )
         pygame.display.flip()
+        pygame.event.pump()
+
+    def save(self, path):
+        """Save the current grid as a PNG. No-op if display is unavailable."""
+        if self._surface is None:
+            return
+        import pathlib
+
+        pathlib.Path(path).parent.mkdir(parents=True, exist_ok=True)
+        pygame.image.save(self._surface, path)
 
     def stop(self):
         """Shut down pygame if it was initialized."""

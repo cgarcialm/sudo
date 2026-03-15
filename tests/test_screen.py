@@ -83,6 +83,29 @@ def test_stop_calls_pygame_quit(mock_pygame):
 
 @patch("screen._PYGAME_AVAILABLE", True)
 @patch("screen.pygame")
+def test_save_writes_png(mock_pygame, tmp_path):
+    mock_pygame.display.set_mode.return_value = MagicMock()
+    renderer = ScreenRenderer()
+    grid = [["#000000"] * GRID_SIZE for _ in range(GRID_SIZE)]
+    renderer.render(grid)
+
+    renderer.save(str(tmp_path / "screen.png"))
+
+    mock_pygame.image.save.assert_called_once()
+
+
+@patch("screen._PYGAME_AVAILABLE", True)
+@patch("screen.pygame")
+def test_save_is_noop_when_not_initialized(mock_pygame, tmp_path):
+    renderer = ScreenRenderer()
+
+    renderer.save(str(tmp_path / "screen.png"))  # should not raise
+
+    mock_pygame.image.save.assert_not_called()
+
+
+@patch("screen._PYGAME_AVAILABLE", True)
+@patch("screen.pygame")
 def test_stop_is_noop_when_not_initialized(mock_pygame):
     renderer = ScreenRenderer()
 

@@ -11,7 +11,7 @@ import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 _BLACK_GRID = json.dumps([["#000000"] * 16 for _ in range(16)])
-_MOCK_REPLY = f"<screen>{_BLACK_GRID}</screen>\nHello from mock!"
+_MOCK_REPLY = f"Hello from mock!\n<screen>{_BLACK_GRID}</screen>"
 
 
 class MockAnthropicHandler(BaseHTTPRequestHandler):

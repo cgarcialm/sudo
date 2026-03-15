@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import sys
 
 import anthropic
 
@@ -21,17 +22,18 @@ SYSTEM_PROMPT = (
 
 SCREEN_PROMPT = (
     "\n\nYou have a 16\u00d716 pixel screen that is yours to paint however you want. "
-    "Every reply must begin with a <screen> block: a JSON array of 16 rows, "
-    'each row an array of 16 hex color strings (e.g. "#ff0000"). '
+    "Write your text reply first, then end with a <screen> block: a JSON array "
+    'of 16 rows, each row an array of 16 hex color strings (e.g. "#ff0000"). '
     "You decide what to show — patterns, symbols, abstract art, solid colors, "
-    "anything. "
-    "After the </screen> tag, write your text reply.\n"
+    "anything.\n"
     "Example format:\n"
-    '<screen>[["#000000","#111111",...16 values...],... 16 rows total ...]</screen>\n'
-    "Your reply text here."
+    "Your reply text here.\n"
+    '<screen>[["#000000","#111111",...16 values...],... 16 rows total ...]</screen>'
 )
 
 _SCREEN_RE = re.compile(r"<screen>(.*?)</screen>", re.DOTALL)
+_SCREEN_TAG = "<screen>"
+_SCREEN_TAG_LEN = len(_SCREEN_TAG)
 
 
 def parse_reply(raw):
@@ -64,7 +66,7 @@ def send_message(client, history, user_message, system_prompt=SYSTEM_PROMPT):
     try:
         response = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=1024,
+            max_tokens=2048,
             system=system_prompt,
             messages=history,
         )
@@ -74,6 +76,51 @@ def send_message(client, history, user_message, system_prompt=SYSTEM_PROMPT):
         return text, grid
     except anthropic.APIError as e:
         raise RuntimeError(f"Claude API error: {e}") from e
+
+
+def _stream_reply(client, history, user_message, system_prompt):
+    """Stream a reply to stdout, suppressing the trailing <screen> block.
+
+    Prints text as it arrives. Stops printing once <screen> is detected.
+    Mutates history in place. Returns (text, grid).
+    """
+    history.append({"role": "user", "content": user_message})
+    buffer = ""
+    printed = 0
+    screen_found = False
+
+    print("\n> Sudo: ", end="", flush=True)
+    try:
+        with client.messages.stream(
+            model="claude-sonnet-4-6",
+            max_tokens=2048,
+            system=system_prompt,
+            messages=history,
+        ) as stream:
+            for chunk in stream.text_stream:
+                buffer += chunk
+                if not screen_found:
+                    pos = buffer.find(_SCREEN_TAG, printed)
+                    if pos != -1:
+                        sys.stdout.write(buffer[printed:pos])
+                        sys.stdout.flush()
+                        screen_found = True
+                    else:
+                        safe = len(buffer) - _SCREEN_TAG_LEN + 1
+                        if safe > printed:
+                            sys.stdout.write(buffer[printed:safe])
+                            sys.stdout.flush()
+                            printed = safe
+        if not screen_found and printed < len(buffer):
+            sys.stdout.write(buffer[printed:])
+            sys.stdout.flush()
+        print()
+    except anthropic.APIError as e:
+        raise RuntimeError(f"Claude API error: {e}") from e
+
+    text, grid = parse_reply(buffer)
+    history.append({"role": "assistant", "content": text})
+    return text, grid
 
 
 def run_chat():
@@ -94,10 +141,10 @@ def run_chat():
         if user_input.lower() == "exit":
             print("Goodbye.\n")
             break
-        text, grid = send_message(client, history, user_input, system_prompt)
+        text, grid = _stream_reply(client, history, user_input, system_prompt)
         if grid is not None:
             renderer.render(grid)
-        print(f"\n> Sudo: {text}\n")
+            renderer.save("memory/screen.png")
     renderer.stop()
     save_history(history)
     try:
