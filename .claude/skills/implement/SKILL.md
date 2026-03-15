@@ -4,6 +4,8 @@ description: Read the plan, propose what to implement next, implement it when co
 allowed-tools: Bash, Read, Glob, Grep, Write, Edit
 ---
 
+Start by reading `HANDOFF.md` if it exists — it contains the current state of the project and next steps from the previous session.
+
 You are implementing the next step of the Sudo project. Follow these steps in order:
 
 ## Steps
