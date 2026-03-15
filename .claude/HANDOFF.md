@@ -5,23 +5,32 @@ Replace the 16×16 pixel grid with SVG output and give Sudo two independent outp
 conversation replies and autonomous visual expression — both learned through the system prompt.
 
 ## What was implemented
-- `src/screen.py` — `ScreenRenderer` now opens the pygame window immediately at startup (eager init). Background daemon thread pumps pygame events every 100ms to keep the window alive while `input()` blocks. `render(svg_string)` uses `cairosvg` to convert SVG → PNG bytes → blit to pygame surface.
-- `src/chat.py` — `parse_reply()` returns `(text, svg_string)` instead of `(text, grid)`. System prompt tells Sudo about its two output channels. `_expression_loop()` background daemon thread wakes every `EXPRESSION_INTERVAL_SECONDS`, sends a quiet moment prompt, renders SVG if Sudo responds.
-- `src/config.py` — added `SCREEN_SIZE = 320`, `EXPRESSION_INTERVAL_SECONDS = 30`, `MAX_TOKENS_EXPRESSION = 512`
+- `src/screen.py` — `ScreenRenderer` opens the pygame window immediately at startup. `tick()` pumps pygame events from the main thread (required on macOS — background thread approach doesn't work with Cocoa). `render(svg_string)` uses `cairosvg` to convert SVG → PNG bytes → blit to pygame surface. cairosvg import catches `(ImportError, OSError)` to handle missing system library gracefully.
+- `src/chat.py` — `parse_reply()` returns `(text, svg_string)`. System prompt tells Sudo about its two output channels. `_expression_loop()` daemon thread wakes every `EXPRESSION_INTERVAL_SECONDS`, sends quiet moment prompt, renders SVG if returned. `run_chat()` moves `input()` to a background thread so the main thread can run the pygame event loop via `renderer.tick()` every 50ms.
+- `src/config.py` — `SCREEN_SIZE = 320`, `EXPRESSION_INTERVAL_SECONDS = 30`, `MAX_TOKENS_EXPRESSION = 512`
+- `src/memory.py` — fixed `load_identity()` TOCTOU: `p.exists()` → `try/except FileNotFoundError`
 - `requirements.txt` — added `cairosvg`
-- `src/memory.py` — fixed `load_identity()` TOCTOU: replaced `p.exists()` check with `try/except FileNotFoundError`
-- Tests: all memory I/O mocked in `run_chat` tests; `test_screen.py` rewritten for SVG + eager init; `test_chat.py` updated for SVG format + new expression loop tests
+- `Dockerfile` — added `libcairo2` system package
+- `dev.sh` — local dev script: `uv run python src/chat.py` with `PYTHONPATH=src`
+- `tests/mock_anthropic_server.py` — updated to support streaming SSE and return SVG response
+- `tests/test_chat.py`, `tests/test_screen.py` — updated for SVG format, eager init, tick()
 
-## What to watch for on Pi
-- `cairosvg` needs to be installed: `pip install cairosvg --break-system-packages`
-- `DISPLAY=:0` required when running over SSH with monitor connected
-- The pygame window opens immediately at startup (before first message)
-- Expression loop fires every 30s — Sudo will draw unprompted
-- SVG rendering is much faster than pixel grid (cairosvg is efficient)
+## How to run locally (mock server, no API key)
+```bash
+# Terminal 1
+uv run python tests/mock_anthropic_server.py
 
-## What's in place
-- Branch `feat/svg-screen` has two commits: test isolation fix + full Phase 4b implementation
-- All 39 unit tests passing, flake8 clean
+# Terminal 2
+ANTHROPIC_API_KEY=test-key ANTHROPIC_BASE_URL=http://localhost:8765 ./dev.sh
+```
+
+## How to run on Pi
+```bash
+ssh sudo@raspberry.local
+cd sudo && git pull
+pip install cairosvg --break-system-packages  # first time only
+DISPLAY=:0 python src/chat.py
+```
 
 ## Next steps (Phase 5: Vision)
 1. Add `src/camera.py` — capture and compress frames (320×240) using `picamera2` or `opencv`

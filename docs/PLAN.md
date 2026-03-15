@@ -51,7 +51,7 @@ Replace the 16×16 pixel grid with SVG — fewer tokens, more expressive, scales
 Sudo also gets two independent output channels and learns about both through its system prompt.
 
 - **SVG rendering**: replace pixel grid with SVG output; render via `cairosvg` + pygame ✅
-- **Eager display init**: pygame window opens immediately at startup, background event-pump thread keeps it alive ✅
+- **Eager display init**: pygame window opens immediately at startup; main thread pumps events via `tick()` while waiting for input ✅
 - **Two output channels**: ✅
   - Conversation reply (text, optionally includes `<screen><svg>...</svg></screen>`)
   - Autonomous expression loop: background thread wakes every N seconds, asks Sudo "do you want to express something?", renders SVG if yes
