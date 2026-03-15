@@ -48,7 +48,22 @@ git add <specific files>
 git commit -m "short description of what was implemented"
 ```
 
-### 7. Push and PR
+### 7. Update the plan
+Update `docs/PLAN.md` to reflect what was just completed:
+- Mark finished items with ✅
+- Add any notes about what's pending or changed
+
+### 8. Push and PR
 - Push the branch: `git push`
 - Create a PR using `gh pr create` with a summary of what was implemented and a test plan
 - Return the PR URL
+
+### 9. Write handoff
+Write `HANDOFF.md` at the project root with:
+- **Goal** — what this session set out to do
+- **What was tried** — approaches taken
+- **What worked** — what's now in place and why
+- **What failed** — anything that didn't work and why
+- **Next steps** — exactly what to do in the next session, in order
+
+This file is the first thing to read when starting a new session on this project.

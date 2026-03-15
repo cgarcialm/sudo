@@ -14,11 +14,12 @@ Sudo is a Raspberry Pi 4 AI robot powered by Claude.
 
 ## Phases
 
-### Phase 1: Foundation
-Pi is on, connected, and talking to Claude.
-- ARM64 Docker environment (mirrors Pi architecture)
-- Python + Anthropic SDK
-- Basic API call works locally and on Pi
+### Phase 1: Foundation ✅
+ARM64 Docker environment working on Mac, ready to deploy to Pi when it arrives.
+- ARM64 Docker environment (mirrors Pi architecture) ✅
+- Python + Anthropic SDK ✅
+- Basic API call works from inside Docker ✅
+- Deploy and verify on Pi (pending — Pi arriving soon)
 
 ### Phase 2: Chat
 Text-based conversation with Sudo via web UI.
