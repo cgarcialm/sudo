@@ -34,7 +34,9 @@ Once confirmed, implement the proposed changes following `docs/CODING_STANDARDS.
 ### 5. Test
 - Check if tests exist in `tests/` for the changed files
 - If not, write them following the standards in `.claude/skills/test/SKILL.md`
-- Run `pytest tests/ -v`
+- Run `pytest tests/ -v --ignore=tests/test_docker.py`
+- Rebuild the Docker image: `docker build -t sudo .`
+- Run `pytest tests/test_docker.py -v`
 - Fix any test failures
 
 ### 6. Review
@@ -67,14 +69,7 @@ Update `docs/PLAN.md` to reflect what was just completed:
 - Mark finished items with ✅
 - Add any notes about what's pending or changed
 
-### 10. Push and PR
-- Push the branch: `git push`
-- Create a PR using `gh pr create` with a summary of what was implemented and a test plan
-- Return the PR URL
-
-**Stop here. The implementation session is not complete until the user confirms the PR is merged. Wait for that confirmation before proceeding to steps 11 and 12.**
-
-### 11. Update skills
+### 10. Update skills
 Review what was learned during this session — things that worked well, things that were painful, patterns that emerged — and propose improvements to any of the skills in `.claude/skills/`.
 
 Present the proposed changes clearly:
@@ -85,7 +80,7 @@ Present the proposed changes clearly:
 
 Once confirmed, apply the changes.
 
-### 12. Write handoff
+### 11. Write handoff
 Write `HANDOFF.md` at the project root. The next session has no memory of this conversation — write everything needed to continue without context. Include:
 - **Goal** — what this session set out to do
 - **What was tried** — approaches taken
@@ -94,3 +89,10 @@ Write `HANDOFF.md` at the project root. The next session has no memory of this c
 - **Next steps** — exactly what to do in the next session, in order
 
 This file is the first thing to read when starting a new session on this project.
+
+### 12. Push and PR
+- Push the branch: `git push`
+- Create a PR using `gh pr create` with a summary of what was implemented and a test plan
+- Return the PR URL
+
+**Stop here and wait for the user to confirm the PR is merged before ending the session.**

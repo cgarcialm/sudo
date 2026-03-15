@@ -27,14 +27,14 @@ Text-based conversation with Sudo via terminal.
 - Conversation history maintained for the session ✅
 - System prompt sets Sudo's personality ✅
 
-### Phase 3: Persistence
+### Phase 3: Persistence ✅
 Sudo remembers past conversations and genuinely evolves over time.
-- `memory/history.json` — rolling window of last N conversation turns, loaded at startup
-- `memory/identity.md` — Sudo's self-concept: personality, opinions, and observations written and updated by Sudo itself
-- At session end, Sudo reflects on the conversation and updates `identity.md` autonomously
-- Both files injected into the system prompt at startup so Sudo picks up where it left off
-- Files live on disk (Pi: `~/sudo/memory/`, dev: Docker volume mount)
-- `identity.md` compressed by Sudo when it grows too large, keeping only what feels significant
+- `memory/history.json` — rolling window of last 50 conversation turns, loaded at startup ✅
+- `memory/identity.md` — Sudo's self-concept: personality, opinions, and observations written and updated by Sudo itself ✅
+- At session end, Sudo reflects on the conversation and updates `identity.md` autonomously ✅
+- Both files injected into the system prompt at startup so Sudo picks up where it left off ✅
+- Files live on disk (Pi: `~/sudo/memory/`, dev: Docker volume mount via `-v ./memory:/app/memory`) ✅
+- `identity.md` compressed by Sudo when it grows too large, keeping only what feels significant ✅
 
 ### Phase 4: Face
 Animated face UI on the screen.
