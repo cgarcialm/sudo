@@ -97,7 +97,32 @@ flowchart LR
     Main -->|tick 20×/sec| Screen
 ```
 
-## Phase 5: Vision
+## Phase 5: Memory Redesign ✅
+
+Tiered memory gives Sudo continuity across sessions without blowing token budgets.
+
+```mermaid
+flowchart LR
+    subgraph Pi["Raspberry Pi"]
+        subgraph Memory["memory/"]
+            History["history.json\n(last 20 turns)"]
+            Summaries["summaries.json\n(last 10 session summaries)"]
+            Identity["identity.md\n(Sudo's self-concept)"]
+        end
+        Chat["chat.py"]
+    end
+
+    Memory -->|"[identity] + [summaries] + [recent turns]\ninjected into system prompt"| Chat
+    Chat -->|session end\n(parallel API calls)| Memory
+```
+
+At session end, two Claude calls run in parallel: one rewrites `identity.md`, one writes a short session summary appended to `summaries.json` (rolling window of 10). History is trimmed to 20 turns on save.
+
+## Phase 6: Microphone
+
+Push-to-talk voice input via `faster-whisper`.
+
+## Phase 7: Vision
 
 Camera frames are sent to Claude. Claude can now see.
 
@@ -114,7 +139,7 @@ flowchart LR
     Claude -->|response| Pi
 ```
 
-## Phase 6: Body
+## Phase 8: Body
 
 The Pi preprocesses sensor data locally and sends one-line summaries to Claude — not raw data — to keep token cost low.
 
@@ -137,7 +162,7 @@ flowchart LR
     Chat -->|HTTPS| API["Anthropic API"]
 ```
 
-## Phase 7: Autonomy
+## Phase 9: Autonomy
 
 You give Sudo a goal. Claude navigates using the camera.
 

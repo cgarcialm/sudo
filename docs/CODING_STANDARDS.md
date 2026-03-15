@@ -51,4 +51,5 @@
 ## Tests
 - All tests in `tests/`
 - Mock all external calls (Claude API, hardware) — no real API calls in tests
+- **Never write to the real `memory/` directory.** Unit tests must use `tmp_path`. Docker integration tests must pass `memory_dir=tempfile.TemporaryDirectory(...)` so they never touch `memory/history.json`, `memory/identity.md`, or `memory/summaries.json`.
 - See [test skill](../.claude/skills/test/SKILL.md) for full testing standards

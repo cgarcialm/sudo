@@ -18,6 +18,7 @@ from memory import (
     build_system_prompt,
     load_history,
     load_identity,
+    load_summaries,
     reflect_and_update_identity,
     save_history,
 )
@@ -161,7 +162,8 @@ def run_chat():
     client = build_client()
     history = load_history()
     identity = load_identity()
-    system_prompt = build_system_prompt(SYSTEM_PROMPT, identity)
+    summaries = load_summaries()
+    system_prompt = build_system_prompt(SYSTEM_PROMPT, identity, summaries)
     renderer = ScreenRenderer()
     threading.Thread(
         target=_expression_loop, args=(client, renderer, system_prompt), daemon=True
