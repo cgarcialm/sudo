@@ -8,7 +8,7 @@ on:
 
 jobs:
   lint:
-    name: Lint & Format
+    name: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,7 +20,7 @@ jobs:
       - run: flake8 .
 
   test:
-    name: Unit Tests
+    name: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +31,7 @@ jobs:
       - run: pytest tests/ -v
 
   docker:
-    name: Docker Integration
+    name: docker
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
