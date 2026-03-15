@@ -5,7 +5,14 @@ from unittest.mock import MagicMock, patch
 import anthropic
 import pytest
 
-from chat import SYSTEM_PROMPT, _expression_loop, parse_reply, send_message
+from chat import (
+    SYSTEM_PROMPT,
+    ScreenState,
+    _expression_loop,
+    _system_with_screen,
+    parse_reply,
+    send_message,
+)
 
 
 @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
@@ -163,7 +170,7 @@ def test_expression_loop_renders_svg_when_returned(mock_sleep):
     mock_renderer = MagicMock()
 
     with pytest.raises(_Stop):
-        _expression_loop(mock_client, mock_renderer, "system")
+        _expression_loop(mock_client, mock_renderer, "system", [], ScreenState())
 
     mock_renderer.render.assert_called_once_with(svg)
     mock_renderer.save.assert_called_once()
@@ -176,13 +183,64 @@ def test_expression_loop_skips_render_when_no_svg(mock_sleep):
     mock_renderer = MagicMock()
 
     with pytest.raises(_Stop):
-        _expression_loop(mock_client, mock_renderer, "system")
+        _expression_loop(mock_client, mock_renderer, "system", [], ScreenState())
 
     mock_renderer.render.assert_not_called()
 
 
+@patch("chat.time.sleep", side_effect=[None, _Stop()])
+def test_expression_loop_includes_history_snapshot(mock_sleep):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(content=[MagicMock(text="")])
+    history = [
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "content": "hey"},
+    ]
+
+    with pytest.raises(_Stop):
+        _expression_loop(mock_client, MagicMock(), "system", history, ScreenState())
+
+    messages_sent = mock_client.messages.create.call_args.kwargs["messages"]
+    assert messages_sent[0] == {"role": "user", "content": "hi"}
+
+
+@patch("chat.time.sleep", side_effect=[None, _Stop()])
+def test_expression_loop_includes_screen_in_system_prompt(mock_sleep):
+    svg = "<svg><rect/></svg>"
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(content=[MagicMock(text="")])
+    screen_state = ScreenState(svg=svg)
+
+    with pytest.raises(_Stop):
+        _expression_loop(mock_client, MagicMock(), "base", [], screen_state)
+
+    system_sent = mock_client.messages.create.call_args.kwargs["system"]
+    assert svg in system_sent
+
+
+def test_screen_state_get_set_svg():
+    state = ScreenState()
+    assert state.get_svg() is None
+    state.set_svg("<svg/>")
+    assert state.get_svg() == "<svg/>"
+
+
+def test_system_with_screen_returns_base_when_no_svg():
+    assert _system_with_screen("base", ScreenState()) == "base"
+
+
+def test_system_with_screen_appends_svg():
+    svg = "<svg><rect/></svg>"
+    state = ScreenState()
+    state.set_svg(svg)
+    result = _system_with_screen("base", state)
+    assert "base" in result
+    assert svg in result
+
+
 @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
 @patch("chat.save_history")
+@patch("chat.load_summaries", return_value=[])
 @patch("chat.load_identity", return_value=None)
 @patch("chat.load_history", return_value=[])
 @patch("chat.reflect_and_update_identity")
@@ -196,6 +254,7 @@ def test_run_chat_renders_svg_from_reply(
     _mock_reflect,
     _mock_load_hist,
     _mock_load_id,
+    _mock_load_summaries,
     _mock_save,
 ):
     """run_chat passes the parsed SVG to renderer.render()."""

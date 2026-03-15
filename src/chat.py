@@ -1,3 +1,4 @@
+import dataclasses
 import os
 import queue
 import re
@@ -8,6 +9,7 @@ import time
 import anthropic
 
 from config import (
+    EXPRESSION_HISTORY_WINDOW,
     EXPRESSION_INTERVAL_SECONDS,
     MAX_TOKENS_CHAT,
     MAX_TOKENS_EXPRESSION,
@@ -51,6 +53,20 @@ _EXPRESSION_PROMPT = (
     "If yes, respond with only <screen><svg>...</svg></screen>. "
     "If no, respond with nothing."
 )
+
+
+@dataclasses.dataclass
+class ScreenState:
+    svg: str | None = None
+    lock: threading.Lock = dataclasses.field(default_factory=threading.Lock)
+
+    def get_svg(self) -> str | None:
+        with self.lock:
+            return self.svg
+
+    def set_svg(self, svg: str) -> None:
+        with self.lock:
+            self.svg = svg
 
 
 def parse_reply(raw):
@@ -137,16 +153,19 @@ def _stream_reply(client, history, user_message, system_prompt):
     return text, svg
 
 
-def _expression_loop(client, renderer, system_prompt):
+def _expression_loop(client, renderer, system_prompt, history, screen_state):
     """Background thread: periodically invite Sudo to express itself visually."""
     while True:
         time.sleep(EXPRESSION_INTERVAL_SECONDS)
         try:
+            snapshot = history[-EXPRESSION_HISTORY_WINDOW:]
+            effective_system = _system_with_screen(system_prompt, screen_state)
+            messages = snapshot + [{"role": "user", "content": _EXPRESSION_PROMPT}]
             response = client.messages.create(
                 model=_MODEL,
                 max_tokens=MAX_TOKENS_EXPRESSION,
-                system=system_prompt,
-                messages=[{"role": "user", "content": _EXPRESSION_PROMPT}],
+                system=effective_system,
+                messages=messages,
             )
             raw = response.content[0].text.strip()
             if raw:
@@ -154,8 +173,17 @@ def _expression_loop(client, renderer, system_prompt):
                 if svg:
                     renderer.render(svg)
                     renderer.save(SCREEN_PNG_PATH)
+                    screen_state.set_svg(svg)
         except Exception:
             pass
+
+
+def _system_with_screen(system_prompt, screen_state):
+    """Append current screen SVG to system prompt if set."""
+    svg = screen_state.get_svg()
+    if not svg:
+        return system_prompt
+    return system_prompt + f"\n\nYour screen is currently showing:\n{svg}"
 
 
 def run_chat():
@@ -164,9 +192,12 @@ def run_chat():
     identity = load_identity()
     summaries = load_summaries()
     system_prompt = build_system_prompt(SYSTEM_PROMPT, identity, summaries)
+    screen_state = ScreenState()
     renderer = ScreenRenderer()
     threading.Thread(
-        target=_expression_loop, args=(client, renderer, system_prompt), daemon=True
+        target=_expression_loop,
+        args=(client, renderer, system_prompt, history, screen_state),
+        daemon=True,
     ).start()
 
     input_queue = queue.Queue()
@@ -204,10 +235,12 @@ def run_chat():
         if user_input.lower() == "exit":
             print("Goodbye.\n")
             break
-        text, svg = _stream_reply(client, history, user_input, system_prompt)
+        effective_system = _system_with_screen(system_prompt, screen_state)
+        text, svg = _stream_reply(client, history, user_input, effective_system)
         if svg is not None:
             renderer.render(svg)
             renderer.save(SCREEN_PNG_PATH)
+            screen_state.set_svg(svg)
         _prompt()
 
     renderer.stop()
