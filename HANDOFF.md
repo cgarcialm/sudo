@@ -1,45 +1,48 @@
-# Handoff — Phase 4 Screen
+# Handoff — Phase 4 Screen (complete)
 
 ## Goal
 Give Sudo a 16×16 pixel screen it owns and paints however it wants as part of every reply.
 
 ## What was tried
-- Straightforward: `screen.py` module with a `ScreenRenderer`, wired into `chat.py`.
-- `run.sh` script so user and tests share the same Docker run command.
-- Docker build automated as a pytest session fixture.
+- `screen.py` module with a `ScreenRenderer`, wired into `chat.py`
+- `run.sh` script so user and tests share the same Docker run command
+- Docker build automated as a pytest session fixture
+- Streaming added so text appears immediately; `<screen>` block moved to end of reply
+- Image save: `memory/screen.png` written after every render
 
 ## What worked
-- `screen.py` — `ScreenRenderer` lazy-inits pygame; silently skips if no display (Docker/headless)
-- `chat.py` — `parse_reply()` extracts `<screen>JSON</screen>` block in a single pass; stores only text in history (no screen data bloat); system prompt tells Sudo to paint whatever it wants
+- `screen.py` — `ScreenRenderer` lazy-inits pygame; silently skips if no display (Docker/headless); `pygame.event.pump()` required on macOS or window never appears
+- `chat.py` — `_stream_reply()` streams text to terminal, suppresses `<screen>` block; `parse_reply()` extracts grid after full response; stores only text in history
 - `run.sh` — canonical run script; `MEMORY_DIR` env var overrides memory mount; tests set it to a temp dir
-- `tests/conftest.py` — `docker_image` session fixture auto-builds before Docker tests; `mock_anthropic_server` depends on it
-- `tests/test_docker.py` — calls `./run.sh` directly; `test_screen_tag_stripped_from_output` verifies `<screen>` never leaks to terminal
-- `/simplify` caught: double regex scan in `parse_reply`, 256 `Rect` allocations per render, `platform.system()` called twice — all fixed
+- `tests/conftest.py` — `docker_image` session fixture auto-builds before Docker tests
+- `.flake8` — `.venv` excluded so flake8 doesn't lint installed packages
+- `memory/screen.png` — saved after each render; open with `open memory/screen.png`
 
 ## What failed
-- Nothing structural. Docker tests failed initially because `run.sh` mounted `./memory` and the test also passed `-v /tmp/...:/app/memory` — duplicate mount. Fixed with `MEMORY_DIR` env var.
+- pygame window on macOS didn't appear without `pygame.event.pump()` — added after `pygame.display.flip()`
+- `<screen>` block was leaking to terminal — fixed by moving it to end of reply and suppressing it in the streaming loop
+- `max_tokens=1024` too low for grid JSON + reply — raised to 2048
 
 ## What's in place
-- `screen.py` — `ScreenRenderer` class, `GRID_SIZE=16`, `PIXEL_SIZE=20`
-- `chat.py` — `parse_reply()`, `SCREEN_PROMPT`, updated `send_message()` returns `(text, grid)`, `run_chat()` renders grid
-- `run.sh` — `./run.sh [extra docker args]`; user sets `ANTHROPIC_API_KEY`
-- `tests/test_screen.py` — 8 unit tests
-- `tests/test_docker.py` — 4 integration tests via `run.sh`
-- Implement skill updated: compact step restored, simplify step added before commit, docker build removed as manual step
+- `screen.py` — `ScreenRenderer`: `render(grid)`, `save(path)`, `stop()`
+- `chat.py` — `parse_reply()`, `SCREEN_PROMPT`, `_stream_reply()`, streaming `run_chat()`
+- `run.sh` — `./run.sh` to run interactively; `ANTHROPIC_API_KEY` required
+- `memory/screen.png` — latest screen state, saved each reply
+- `.venv/` — local venv via `uv venv && uv pip install -r requirements.txt`
 
-## Transferring to the Pi
-When the Pi arrives and SD card is set up:
-```bash
-scp -r ./memory/ pi@<pi-ip>:~/sudo/memory/
-# On Pi, install system deps if needed and run:
-./run.sh
-```
+## Plan update
+Phase ordering updated based on conversation with Cecilia:
+- Phase 5: Vision (camera)
+- Phase 6: Body (cheap local sensors — audio, light, temperature, time — preprocessed on Pi, sent as text summaries to keep token cost low)
+- Phase 7: Autonomy (movement)
+
+Principle for Phase 6: process locally, send summaries not raw data.
+Sensors to add: BH1750 (ambient light), DHT22 (temperature), microphone with local audio classifier.
 
 ## Next steps (Phase 5: Vision)
-Camera input sent to Claude.
-
-1. Add camera capture module (`camera.py`) — capture and compress frames (320×240)
-2. Modify `send_message` to optionally include a base64 image in the message
-3. Update `chat.py` to capture a frame on each turn and include it
+1. Add `camera.py` — capture and compress frames (320×240) using `picamera2` or `opencv`
+2. Encode frame as base64, include in message as image content block
+3. Update `_stream_reply` (or `send_message`) to optionally attach an image
 4. Update system prompt to tell Sudo it can see
-5. Test: mock camera in unit tests; Docker test skips camera (no device)
+5. Test: mock camera in unit tests; Docker test skips camera (no device available)
+6. Dev: test with a still image file before connecting real camera
