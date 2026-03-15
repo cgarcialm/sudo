@@ -178,10 +178,13 @@ def run_chat():
                 input_queue.put(None)
                 return
 
+    def _prompt():
+        sys.stdout.write("> ")
+        sys.stdout.flush()
+
     threading.Thread(target=_read_input, daemon=True).start()
     print("Sudo is ready. Type 'exit' to quit.\n")
-    sys.stdout.write("> ")
-    sys.stdout.flush()
+    _prompt()
 
     while True:
         renderer.tick()
@@ -194,8 +197,7 @@ def run_chat():
             break
         user_input = user_input.strip()
         if not user_input:
-            sys.stdout.write("> ")
-            sys.stdout.flush()
+            _prompt()
             continue
         if user_input.lower() == "exit":
             print("Goodbye.\n")
@@ -204,8 +206,7 @@ def run_chat():
         if svg is not None:
             renderer.render(svg)
             renderer.save(SCREEN_PNG_PATH)
-        sys.stdout.write("> ")
-        sys.stdout.flush()
+        _prompt()
 
     renderer.stop()
     save_history(history)
