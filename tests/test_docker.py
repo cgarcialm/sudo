@@ -36,7 +36,8 @@ def _run_sudo(extra_args, stdin, memory_dir=None):
 
 
 def test_chat_single_turn(mock_anthropic_server):
-    result = _run_sudo([], stdin="hello\nexit\n")
+    with tempfile.TemporaryDirectory(dir="/tmp") as tmp_dir:
+        result = _run_sudo([], stdin="hello\nexit\n", memory_dir=tmp_dir)
 
     assert result.returncode == 0
     assert "Sudo:" in result.stdout
@@ -44,7 +45,10 @@ def test_chat_single_turn(mock_anthropic_server):
 
 def test_chat_multi_turn(mock_anthropic_server):
     """Two messages are sent and two replies are received in the same session."""
-    result = _run_sudo([], stdin="first message\nsecond message\nexit\n")
+    with tempfile.TemporaryDirectory(dir="/tmp") as tmp_dir:
+        result = _run_sudo(
+            [], stdin="first message\nsecond message\nexit\n", memory_dir=tmp_dir
+        )
 
     assert result.returncode == 0
     assert result.stdout.count("Sudo:") == 2
@@ -52,7 +56,8 @@ def test_chat_multi_turn(mock_anthropic_server):
 
 def test_screen_tag_stripped_from_output(mock_anthropic_server):
     """<screen> blocks are parsed internally and never shown in the terminal."""
-    result = _run_sudo([], stdin="hello\nexit\n")
+    with tempfile.TemporaryDirectory(dir="/tmp") as tmp_dir:
+        result = _run_sudo([], stdin="hello\nexit\n", memory_dir=tmp_dir)
 
     assert result.returncode == 0
     assert "<screen>" not in result.stdout
