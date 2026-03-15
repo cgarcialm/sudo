@@ -58,7 +58,7 @@ Sudo also gets two independent output channels and learns about both through its
 - **System prompt update**: tell Sudo what it is (Pi robot), that it has a physical screen, and that it has both channels available — Sudo learns its own capabilities through context, not hardcoded behavior ✅
 - Loops are independent — conversation never blocks expression and vice versa ✅
 
-### Phase 5: Memory Redesign
+### Phase 5: Memory Redesign ✅
 Fix three problems: fresh deploys start blank, history window is too large, no continuity between sessions.
 
 **Tiered memory:**
