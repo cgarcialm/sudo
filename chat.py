@@ -14,6 +14,11 @@ def build_client():
 
 
 def send_message(client, history, user_message):
+    """Send a message to Claude and return the reply.
+
+    Mutates history in place: appends the user message before the call
+    and the assistant reply after.
+    """
     history.append({"role": "user", "content": user_message})
     try:
         response = client.messages.create(

@@ -62,6 +62,23 @@ def test_send_message_passes_full_history(mock_anthropic):
 
 @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
 @patch("chat.anthropic.Anthropic")
+def test_send_message_passes_system_prompt(mock_anthropic):
+    from chat import SYSTEM_PROMPT
+
+    mock_client = MagicMock()
+    mock_anthropic.return_value = mock_client
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="Hi!")]
+    )
+
+    send_message(mock_client, [], "Hello")
+
+    call_args = mock_client.messages.create.call_args
+    assert call_args.kwargs["system"] == SYSTEM_PROMPT
+
+
+@patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+@patch("chat.anthropic.Anthropic")
 def test_send_message_raises_on_api_error(mock_anthropic):
     mock_client = MagicMock()
     mock_anthropic.return_value = mock_client
