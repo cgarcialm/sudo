@@ -58,7 +58,7 @@ def test_something(mock_anthropic):
 8. If tests fail due to a bug in the source code, report it and ask before changing anything
 9. **Docker integration test** — always run this, every time. It exercises the system as it will actually run on the Pi. Always rebuild the image first — a stale image will pass against old code and hide failures.
    - Ask: **what does a user do with the system on the Pi right now?** That interaction is what the Docker test must cover end-to-end.
-   - Review `tests/test_docker.py` — if it doesn't reflect the current system behaviour (e.g. a new entrypoint was added, the interaction model changed), update it before running.
+   - Review `tests/test_docker.py` — if it doesn't reflect the current system behaviour, update it before running. Specifically: if a new file is written to `memory/` at session end (e.g. `summaries.json`), add an assertion for it in `test_memory_written_after_session`. If a new output channel or interaction mode was added, add a test for it.
    - The mock server in `conftest.py` stands in for the real Anthropic API — pipe real stdin, check real stdout, verify the full flow works inside the container.
    - The `docker_image` fixture in `conftest.py` builds the image automatically — no manual build step needed.
    - Run: `pytest tests/test_docker.py -v`
