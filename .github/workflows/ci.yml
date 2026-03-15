@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install black flake8
+      - run: black --check .
+      - run: flake8 .
+
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt pytest pytest-mock
+      - run: pytest tests/ -v
+
+  docker:
+    name: Docker Integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU for ARM64
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        run: docker build --platform linux/arm64 -t sudo .
+
+      - name: Start mock Anthropic server
+        run: |
+          pip install anthropic
+          python tests/mock_anthropic_server.py &
+          sleep 1
+
+      - name: Run container against mock server
+        run: |
+          docker run --rm \
+            --network host \
+            -e ANTHROPIC_API_KEY=test-key \
+            -e ANTHROPIC_BASE_URL=http://localhost:8765 \
+            sudo
