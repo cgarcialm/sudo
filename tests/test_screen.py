@@ -17,6 +17,26 @@ def test_init_opens_display_immediately(mock_pygame):
 
 @patch("screen._CAIROSVG_AVAILABLE", True)
 @patch("screen._PYGAME_AVAILABLE", True)
+@patch("screen.pygame")
+def test_tick_pumps_events(mock_pygame):
+    mock_pygame.display.set_mode.return_value = MagicMock()
+    renderer = ScreenRenderer()
+
+    renderer.tick()
+
+    mock_pygame.event.pump.assert_called_once()
+    renderer.stop()
+
+
+@patch("screen._PYGAME_AVAILABLE", False)
+def test_tick_is_noop_when_not_initialized():
+    renderer = ScreenRenderer()
+
+    renderer.tick()  # should not raise
+
+
+@patch("screen._CAIROSVG_AVAILABLE", True)
+@patch("screen._PYGAME_AVAILABLE", True)
 @patch("screen.cairosvg", create=True)
 @patch("screen.pygame")
 def test_render_converts_svg_and_blits(mock_pygame, mock_cairosvg):

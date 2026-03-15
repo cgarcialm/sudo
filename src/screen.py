@@ -1,13 +1,11 @@
 import io
 import pathlib
-import threading
-import time
 
 try:
     import cairosvg
 
     _CAIROSVG_AVAILABLE = True
-except ImportError:
+except (ImportError, OSError):
     _CAIROSVG_AVAILABLE = False
 
 try:
@@ -25,12 +23,11 @@ class ScreenRenderer:
 
     Initializes the display immediately on construction.
     Silently skips rendering if pygame or cairosvg is unavailable.
-    Keeps the window alive with a background event-pump thread.
+    Call tick() from the main thread regularly to keep the window responsive.
     """
 
     def __init__(self):
         self._surface = None
-        self._stop_event = threading.Event()
         self._init_display()
 
     def _init_display(self):
@@ -42,18 +39,14 @@ class ScreenRenderer:
             pygame.display.set_caption("Sudo")
             self._surface.fill((0, 0, 0))
             pygame.display.flip()
-            self._start_event_pump()
         except pygame.error:
             pygame.quit()
             self._surface = None
 
-    def _start_event_pump(self):
-        def pump():
-            while not self._stop_event.is_set():
-                pygame.event.pump()
-                time.sleep(0.1)
-
-        threading.Thread(target=pump, daemon=True).start()
+    def tick(self):
+        """Pump pygame events. Must be called from the main thread."""
+        if self._surface is not None:
+            pygame.event.pump()
 
     def render(self, svg_string):
         """Render an SVG string to the screen. No-op if display or cairosvg missing."""
@@ -80,7 +73,6 @@ class ScreenRenderer:
 
     def stop(self):
         """Shut down pygame if it was initialized."""
-        self._stop_event.set()
         if self._surface is not None:
             pygame.quit()
             self._surface = None

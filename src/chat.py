@@ -1,4 +1,5 @@
 import os
+import queue
 import re
 import sys
 import threading
@@ -165,14 +166,36 @@ def run_chat():
     threading.Thread(
         target=_expression_loop, args=(client, renderer, system_prompt), daemon=True
     ).start()
+
+    input_queue = queue.Queue()
+
+    def _read_input():
+        while True:
+            try:
+                line = input()
+                input_queue.put(line)
+            except (EOFError, KeyboardInterrupt):
+                input_queue.put(None)
+                return
+
+    threading.Thread(target=_read_input, daemon=True).start()
     print("Sudo is ready. Type 'exit' to quit.\n")
+    sys.stdout.write("> ")
+    sys.stdout.flush()
+
     while True:
+        renderer.tick()
         try:
-            user_input = input("> ").strip()
-        except (EOFError, KeyboardInterrupt):
+            user_input = input_queue.get(timeout=0.05)
+        except queue.Empty:
+            continue
+        if user_input is None:
             print("\nGoodbye.\n")
             break
+        user_input = user_input.strip()
         if not user_input:
+            sys.stdout.write("> ")
+            sys.stdout.flush()
             continue
         if user_input.lower() == "exit":
             print("Goodbye.\n")
@@ -181,6 +204,9 @@ def run_chat():
         if svg is not None:
             renderer.render(svg)
             renderer.save(SCREEN_PNG_PATH)
+        sys.stdout.write("> ")
+        sys.stdout.flush()
+
     renderer.stop()
     save_history(history)
     try:
