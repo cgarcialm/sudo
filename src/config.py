@@ -5,9 +5,11 @@ MAX_TOKENS_MEMORY = 1024
 
 HISTORY_PATH = "memory/history.json"
 IDENTITY_PATH = "memory/identity.md"
+SUMMARIES_PATH = "memory/summaries.json"
 SCREEN_PNG_PATH = "memory/screen.png"
 
-MAX_HISTORY_TURNS = 50
+MAX_HISTORY_TURNS = 20
+MAX_SUMMARIES = 10
 IDENTITY_MAX_CHARS = 4000
 
 SCREEN_SIZE = 320

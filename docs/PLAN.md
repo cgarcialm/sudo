@@ -58,13 +58,41 @@ Sudo also gets two independent output channels and learns about both through its
 - **System prompt update**: tell Sudo what it is (Pi robot), that it has a physical screen, and that it has both channels available — Sudo learns its own capabilities through context, not hardcoded behavior ✅
 - Loops are independent — conversation never blocks expression and vice versa ✅
 
-### Phase 5: Vision
+### Phase 5: Memory Redesign
+Fix three problems: fresh deploys start blank, history window is too large, no continuity between sessions.
+
+**Tiered memory:**
+- Tier 1 — Recent turns (in-context): last 20 turns from `history.json`
+- Tier 2 — Session summaries (warm): `summaries.json` — one short paragraph per past session, written by Sudo at session end, rolling window of 10
+- Tier 3 — Identity (self-concept): `identity.md` — Sudo builds this itself; starts blank on fresh deploy (first session will create it)
+
+**At startup:** all three tiers injected into system prompt as `[identity] + [last N summaries] + [recent turns]`.
+
+**At session end:** Sudo writes a short session summary (appended to `summaries.json`) in addition to updating `identity.md`.
+
+Files:
+- `src/config.py` — `MAX_HISTORY_TURNS=20`, `MAX_SUMMARIES=10`, `SUMMARIES_PATH`
+- `src/memory.py` — `load_summaries()`, `save_summary()`, updated `build_system_prompt()`, summary generation in `reflect_and_update_identity()` (runs in parallel with identity reflection)
+- `tests/test_memory.py` — summaries load/save/trim, system prompt injection
+
+### Phase 6: Microphone
+Push-to-talk voice input. Press Enter to start recording, Enter again to stop; transcription sent as user message.
+
+- `src/audio.py` — `AudioCapture` class using `pyaudio`; `transcribe(audio_path) -> str` using `faster-whisper` (lighter than openai-whisper, runs on Pi)
+- `src/chat.py` — `run_chat()` offers voice input mode; press Enter to record, Enter again to stop and transcribe
+- `src/config.py` — audio config: `WHISPER_MODEL="base"`, `AUDIO_SAMPLE_RATE=16000`
+- `requirements.txt` — add `faster-whisper`, `pyaudio`
+- `Dockerfile` — add `portaudio19-dev` system package
+- `tests/test_audio.py` — mocked audio device tests
+- Use `tiny` or `base` whisper model for Pi speed
+
+### Phase 7: Vision
 Camera input sent to Claude.
 - Capture and compress frames (320x240)
 - Send frames to Claude with context
 - Claude interprets what it sees
 
-### Phase 6: Body
+### Phase 8: Body
 Sudo gets a sense of its environment through cheap local sensors. The Pi preprocesses everything and sends compressed text summaries — not raw data — to keep token cost low.
 - **Audio**: local model classifies ambient sound (quiet/loud, voice present/absent, inside/outside) → one-line summary injected into context
 - **Light**: ambient light sensor → time-of-day awareness (day/night/dim)
@@ -72,7 +100,7 @@ Sudo gets a sense of its environment through cheap local sensors. The Pi preproc
 - **Time**: always available, always included
 - Principle: process locally, send summaries. "It's quiet, midday, no one in the room." costs almost nothing and gives Sudo a real sense of presence.
 
-### Phase 7: Autonomy
+### Phase 9: Autonomy
 Sudo moves, reacts, and makes decisions on its own.
 - High-level navigation: user gives a goal ("go to the door"), Claude uses camera frames to decide each movement step
 - Uses `claude-haiku-4-5` for speed and cost efficiency
