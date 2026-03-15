@@ -52,12 +52,12 @@ def run_chat():
         try:
             user_input = input("> ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\nGoodbye.")
+            print("\nGoodbye.\n")
             break
         if not user_input:
             continue
         if user_input.lower() == "exit":
-            print("Goodbye.")
+            print("Goodbye.\n")
             break
         reply = send_message(client, history, user_input, system_prompt)
         print(f"\n> Sudo: {reply}\n")
