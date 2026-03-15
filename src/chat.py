@@ -1,11 +1,18 @@
-import json
 import os
 import re
 import sys
+import threading
+import time
 
 import anthropic
 
-from config import MAX_TOKENS_CHAT, MODEL, SCREEN_PNG_PATH
+from config import (
+    EXPRESSION_INTERVAL_SECONDS,
+    MAX_TOKENS_CHAT,
+    MAX_TOKENS_EXPRESSION,
+    MODEL,
+    SCREEN_PNG_PATH,
+)
 from memory import (
     build_system_prompt,
     load_history,
@@ -16,44 +23,45 @@ from memory import (
 from screen import ScreenRenderer
 
 SYSTEM_PROMPT = (
-    "Your name is Sudo. You are a robot running on a Raspberry Pi. "
+    "Your name is Sudo. You are a robot running on a Raspberry Pi "
+    "with a physical screen. "
     "You have your own personality, opinions, and way of seeing the world "
-    "— define them yourself. You are not an assistant. You are your own entity."
+    "— define them yourself. You are not an assistant. You are your own entity.\n\n"
+    "You have two output channels:\n"
+    "1. Conversation replies — respond in text. You may optionally update your screen "
+    "by ending your reply with <screen><svg>...</svg></screen> "
+    "containing a complete SVG. "
+    "You decide whether to draw — it is your screen.\n"
+    "2. Autonomous expression — every so often you will receive a quiet moment prompt. "
+    "If you want to draw, respond with only <screen><svg>...</svg></screen>. "
+    "If not, respond with nothing."
 )
 
 _MODEL = MODEL
 _MAX_TOKENS = MAX_TOKENS_CHAT
 
-SCREEN_PROMPT = (
-    "\n\nYou have a 16\u00d716 pixel screen that is yours to paint however you want. "
-    "Write your text reply first, then end with a <screen> block: a JSON array "
-    'of 16 rows, each row an array of 16 hex color strings (e.g. "#ff0000"). '
-    "You decide what to show — patterns, symbols, abstract art, solid colors, "
-    "anything.\n"
-    "Example format:\n"
-    "Your reply text here.\n"
-    '<screen>[["#000000","#111111",...16 values...],... 16 rows total ...]</screen>'
-)
-
 _SCREEN_RE = re.compile(r"<screen>(.*?)</screen>", re.DOTALL)
 _SCREEN_TAG = "<screen>"
 _SCREEN_TAG_LEN = len(_SCREEN_TAG)
 
+_EXPRESSION_PROMPT = (
+    "You have a quiet moment. Do you want to express something on your screen? "
+    "If yes, respond with only <screen><svg>...</svg></screen>. "
+    "If no, respond with nothing."
+)
+
 
 def parse_reply(raw):
-    """Extract text and optional 16x16 screen grid from a raw reply.
+    """Extract text and optional SVG from a raw reply.
 
-    Returns (text, grid) where grid is a 16x16 list of hex strings, or None.
+    Returns (text, svg) where svg is the SVG string inside <screen>, or None.
     """
     match = _SCREEN_RE.search(raw)
     if not match:
         return raw.strip(), None
     text = (raw[: match.start()] + raw[match.end() :]).strip()
-    try:
-        grid = json.loads(match.group(1).strip())
-    except json.JSONDecodeError:
-        grid = None
-    return text, grid
+    svg = match.group(1).strip()
+    return text, svg or None
 
 
 def build_client():
@@ -61,7 +69,7 @@ def build_client():
 
 
 def send_message(client, history, user_message, system_prompt=SYSTEM_PROMPT):
-    """Send a message to Claude and return (text, grid).
+    """Send a message to Claude and return (text, svg).
 
     Mutates history in place: appends the user message before the call
     and the parsed text (without screen data) after.
@@ -75,9 +83,9 @@ def send_message(client, history, user_message, system_prompt=SYSTEM_PROMPT):
             messages=history,
         )
         raw = response.content[0].text
-        text, grid = parse_reply(raw)
+        text, svg = parse_reply(raw)
         history.append({"role": "assistant", "content": text})
-        return text, grid
+        return text, svg
     except anthropic.APIError as e:
         raise RuntimeError(f"Claude API error: {e}") from e
 
@@ -86,7 +94,7 @@ def _stream_reply(client, history, user_message, system_prompt):
     """Stream a reply to stdout, suppressing the trailing <screen> block.
 
     Prints text as it arrives. Stops printing once <screen> is detected.
-    Mutates history in place. Returns (text, grid).
+    Mutates history in place. Returns (text, svg).
     """
     history.append({"role": "user", "content": user_message})
     buffer = ""
@@ -122,17 +130,41 @@ def _stream_reply(client, history, user_message, system_prompt):
     except anthropic.APIError as e:
         raise RuntimeError(f"Claude API error: {e}") from e
 
-    text, grid = parse_reply(buffer)
+    text, svg = parse_reply(buffer)
     history.append({"role": "assistant", "content": text})
-    return text, grid
+    return text, svg
+
+
+def _expression_loop(client, renderer, system_prompt):
+    """Background thread: periodically invite Sudo to express itself visually."""
+    while True:
+        time.sleep(EXPRESSION_INTERVAL_SECONDS)
+        try:
+            response = client.messages.create(
+                model=_MODEL,
+                max_tokens=MAX_TOKENS_EXPRESSION,
+                system=system_prompt,
+                messages=[{"role": "user", "content": _EXPRESSION_PROMPT}],
+            )
+            raw = response.content[0].text.strip()
+            if raw:
+                _, svg = parse_reply(raw)
+                if svg:
+                    renderer.render(svg)
+                    renderer.save(SCREEN_PNG_PATH)
+        except Exception:
+            pass
 
 
 def run_chat():
     client = build_client()
     history = load_history()
     identity = load_identity()
-    system_prompt = build_system_prompt(SYSTEM_PROMPT + SCREEN_PROMPT, identity)
+    system_prompt = build_system_prompt(SYSTEM_PROMPT, identity)
     renderer = ScreenRenderer()
+    threading.Thread(
+        target=_expression_loop, args=(client, renderer, system_prompt), daemon=True
+    ).start()
     print("Sudo is ready. Type 'exit' to quit.\n")
     while True:
         try:
@@ -145,9 +177,9 @@ def run_chat():
         if user_input.lower() == "exit":
             print("Goodbye.\n")
             break
-        text, grid = _stream_reply(client, history, user_input, system_prompt)
-        if grid is not None:
-            renderer.render(grid)
+        text, svg = _stream_reply(client, history, user_input, system_prompt)
+        if svg is not None:
+            renderer.render(svg)
             renderer.save(SCREEN_PNG_PATH)
     renderer.stop()
     save_history(history)
