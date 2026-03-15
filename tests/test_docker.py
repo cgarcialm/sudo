@@ -65,7 +65,7 @@ def test_screen_tag_stripped_from_output(mock_anthropic_server):
 
 
 def test_memory_written_after_session(mock_anthropic_server):
-    """history.json, identity.md, and summaries.json are written to the mounted memory volume."""
+    """All three memory files are written to the mounted volume after a session."""
     with tempfile.TemporaryDirectory(dir="/tmp") as tmp_dir:
         result = _run_sudo([], stdin="hello\nexit\n", memory_dir=tmp_dir)
 
