@@ -35,6 +35,11 @@ def test_something(mock_anthropic):
     # test your code here
 ```
 
+**Integration tests:**
+- Never run services or containers as raw shell commands in test steps — use pytest fixtures in `conftest.py` to manage lifecycle (start, yield, teardown)
+- Use `subprocess.run` / `subprocess.Popen` inside fixtures and tests, not `os.system` or shell scripts
+- Handle platform differences (Mac vs Linux) inside the test code using `platform.system()`, not in the skill instructions
+
 **Naming:**
 - `test_<what it does>` for happy path
 - `test_<what it does>_when_<condition>` for edge cases
