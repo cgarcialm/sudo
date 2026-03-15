@@ -38,7 +38,31 @@ flowchart LR
     Chat -->|reply| User
 ```
 
-## Phase 3: Face
+## Phase 3: Persistence
+
+Sudo's memory and identity survive across sessions. Both are written to disk and loaded at startup.
+
+```mermaid
+flowchart LR
+    User["Terminal\n(chat.py)"]
+
+    subgraph Pi["Raspberry Pi"]
+        Chat["chat.py"]
+        subgraph Memory["memory/"]
+            History["history.json\n(last N turns)"]
+            Identity["identity.md\n(Sudo's self-concept)"]
+        end
+    end
+
+    Memory -->|load at startup| Chat
+    User -->|input| Chat
+    Chat -->|HTTPS| API["Anthropic API"]
+    API --> Claude
+    Claude -->|reply| Chat
+    Chat -->|reflect + update on exit| Memory
+```
+
+## Phase 4: Face (pushed from Phase 3)
 
 Claude decides Sudo's emotion, rendered on screen.
 
@@ -59,7 +83,7 @@ flowchart LR
     Face --> Screen
 ```
 
-## Phase 4: Vision
+## Phase 5: Vision (pushed from Phase 4)
 
 Camera frames are sent to Claude. Claude can now see.
 
@@ -76,7 +100,7 @@ flowchart LR
     Claude -->|response| Pi
 ```
 
-## Phase 5: Autonomy
+## Phase 6: Autonomy (pushed from Phase 5)
 
 You give Sudo a goal. Claude navigates using the camera.
 

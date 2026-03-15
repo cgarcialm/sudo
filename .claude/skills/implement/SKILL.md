@@ -43,7 +43,7 @@ Once confirmed, implement the proposed changes following `docs/CODING_STANDARDS.
 - Check all standards from `docs/CODING_STANDARDS.md`
 - Fix any linter/formatter issues automatically
 - Fix any standards violations
-- Update `docs/ARCHITECTURE.md` and `docs/PLAN.md` to reflect any decisions made during implementation (e.g. approach changed, scope narrowed, new constraints)
+- Update `docs/ARCHITECTURE.md` and `docs/PLAN.md` to reflect any decisions made during implementation (e.g. approach changed, scope narrowed, new constraints). Write the current truth — the next session has no memory of this conversation, so docs must stand on their own.
 
 ### 7. Loop until complete
 This loop is still implementation — do not exit it until everything is clean and the user confirms.
@@ -86,7 +86,7 @@ Present the proposed changes clearly:
 Once confirmed, apply the changes.
 
 ### 12. Write handoff
-Write `HANDOFF.md` at the project root with:
+Write `HANDOFF.md` at the project root. The next session has no memory of this conversation — write everything needed to continue without context. Include:
 - **Goal** — what this session set out to do
 - **What was tried** — approaches taken
 - **What worked** — what's now in place and why
