@@ -15,8 +15,6 @@ try:
 except ImportError:
     _PYGAME_AVAILABLE = False
 
-from config import SCREEN_SIZE as _SCREEN_SIZE
-
 
 class ScreenRenderer:
     """Renders SVG content in a pygame window.
@@ -35,7 +33,7 @@ class ScreenRenderer:
             return
         try:
             pygame.init()
-            self._surface = pygame.display.set_mode((_SCREEN_SIZE, _SCREEN_SIZE))
+            self._surface = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
             pygame.display.set_caption("Sudo")
             self._surface.fill((0, 0, 0))
             pygame.display.flip()
@@ -53,10 +51,11 @@ class ScreenRenderer:
         if self._surface is None or not _CAIROSVG_AVAILABLE:
             return
         try:
+            w, h = self._surface.get_size()
             png_bytes = cairosvg.svg2png(
                 bytestring=svg_string.encode(),
-                output_width=_SCREEN_SIZE,
-                output_height=_SCREEN_SIZE,
+                output_width=w,
+                output_height=h,
             )
             img = pygame.image.load(io.BytesIO(png_bytes))
             self._surface.blit(img, (0, 0))
