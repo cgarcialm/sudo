@@ -26,3 +26,4 @@ Review the target file(s) against the Sudo coding standards defined in `docs/COD
    - Comments only where logic isn't self-evident
 5. Fix all linter and formatter issues automatically
 6. Report any structural or standards violations and ask before changing them
+7. Check that `docs/ARCHITECTURE.md` and `docs/PLAN.md` reflect any decisions made in the implementation — flag any discrepancies and update them
