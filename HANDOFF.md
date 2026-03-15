@@ -32,6 +32,5 @@ Set up a working Docker environment on Mac (ARM64) that connects to the Claude A
 - `.claude/skills/implement/` — `/implement` skill: full propose → build → review → test → commit → PR → handoff loop
 
 ## Next steps
-1. **Pi arrives** — clone repo, run same Docker setup, verify API call works on Pi
-2. **Phase 2: Chat** — build FastAPI server with conversation history, browser UI at `http://sudo.local`
-3. Use `/implement` to drive Phase 2 — it will read the plan, propose, and execute
+1. **Phase 2: Chat** — build FastAPI server with conversation history, browser UI at `http://sudo.local` — use `/implement` to drive this
+2. **Pi arrives** — clone repo, run same Docker setup, verify API call works on Pi (can happen in parallel)
