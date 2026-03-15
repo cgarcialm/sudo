@@ -43,6 +43,7 @@ Once confirmed, implement the proposed changes following `docs/CODING_STANDARDS.
 - Check all standards from `docs/CODING_STANDARDS.md`
 - Fix any linter/formatter issues automatically
 - Fix any standards violations
+- Update `docs/ARCHITECTURE.md` and `docs/PLAN.md` to reflect any decisions made during implementation (e.g. approach changed, scope narrowed, new constraints)
 
 ### 7. Loop until both pass
 If either step 5 or step 6 has failures, fix them and re-run both. Repeat until `pytest` and `flake8` both pass 100%.

@@ -19,25 +19,24 @@ flowchart LR
 
 ## Phase 2: Chat
 
-Pi runs a web server. You chat with Sudo from a browser.
+You chat with Sudo from a terminal. Conversation history persists for the session.
 
 ```mermaid
 flowchart LR
-    User["Your Phone / Mac\n(browser)"]
+    User["Terminal\n(chat.py)"]
 
     subgraph Pi["Raspberry Pi"]
-        Server["FastAPI Server"]
-        History["Conversation History"]
-        Server <--> History
+        Chat["chat.py\nREPL loop"]
+        History["Conversation History\n(in-memory)"]
+        Chat <--> History
     end
 
-    User -->|http://sudo.local| Server
-    Server -->|HTTPS| API["Anthropic API"]
+    User -->|input| Chat
+    Chat -->|HTTPS| API["Anthropic API"]
     API --> Claude
-    Claude -->|text response| Server
+    Claude -->|text response| Chat
+    Chat -->|reply| User
 ```
-
-Remote access outside home network: TBD
 
 ## Phase 3: Face
 
@@ -45,18 +44,18 @@ Claude decides Sudo's emotion, rendered on screen.
 
 ```mermaid
 flowchart LR
-    User["Your Phone / Mac\n(browser)"]
+    User["Terminal\n(chat.py)"]
 
     subgraph Pi["Raspberry Pi"]
-        Server["FastAPI Server"]
+        Chat["chat.py"]
         Face["Face Renderer"]
     end
 
-    User -->|http://sudo.local| Server
-    Server -->|HTTPS| API["Anthropic API"]
+    User -->|input| Chat
+    Chat -->|HTTPS| API["Anthropic API"]
     API --> Claude
-    Claude -->|text + emotion| Server
-    Server --> Face
+    Claude -->|text + emotion| Chat
+    Chat --> Face
     Face --> Screen
 ```
 
