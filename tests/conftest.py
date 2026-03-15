@@ -7,11 +7,12 @@ import pytest
 @pytest.fixture(scope="session")
 def docker_image():
     """Build the Docker image before running Docker integration tests."""
-    subprocess.run(
+    result = subprocess.run(
         ["docker", "build", "--platform", "linux/arm64", "-t", "sudo", "."],
-        check=True,
         capture_output=True,
     )
+    if result.returncode != 0:
+        raise RuntimeError(f"Docker build failed:\n{result.stderr.decode()}")
 
 
 @pytest.fixture(scope="session")

@@ -20,6 +20,9 @@ SYSTEM_PROMPT = (
     "— define them yourself. You are not an assistant. You are your own entity."
 )
 
+_MODEL = "claude-sonnet-4-6"
+_MAX_TOKENS = 2048
+
 SCREEN_PROMPT = (
     "\n\nYou have a 16\u00d716 pixel screen that is yours to paint however you want. "
     "Write your text reply first, then end with a <screen> block: a JSON array "
@@ -65,8 +68,8 @@ def send_message(client, history, user_message, system_prompt=SYSTEM_PROMPT):
     history.append({"role": "user", "content": user_message})
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=2048,
+            model=_MODEL,
+            max_tokens=_MAX_TOKENS,
             system=system_prompt,
             messages=history,
         )
@@ -92,8 +95,8 @@ def _stream_reply(client, history, user_message, system_prompt):
     print("\n> Sudo: ", end="", flush=True)
     try:
         with client.messages.stream(
-            model="claude-sonnet-4-6",
-            max_tokens=2048,
+            model=_MODEL,
+            max_tokens=_MAX_TOKENS,
             system=system_prompt,
             messages=history,
         ) as stream:

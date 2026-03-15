@@ -1,3 +1,4 @@
+import json
 import os
 from unittest.mock import MagicMock, patch
 
@@ -92,7 +93,7 @@ def test_send_message_raises_on_api_error(mock_anthropic):
 @patch("chat.anthropic.Anthropic")
 def test_send_message_strips_screen_from_history(mock_anthropic):
     """Screen data is not stored in history — only the text reply."""
-    grid_json = str([["#000000"] * 16 for _ in range(16)])
+    grid_json = json.dumps([["#000000"] * 16 for _ in range(16)])
     raw = f"<screen>{grid_json}</screen>\nHello!"
     mock_client = MagicMock()
     mock_anthropic.return_value = mock_client
@@ -107,8 +108,6 @@ def test_send_message_strips_screen_from_history(mock_anthropic):
 @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
 @patch("chat.anthropic.Anthropic")
 def test_send_message_returns_grid_when_present(mock_anthropic):
-    import json
-
     grid = [["#ff0000"] * 16 for _ in range(16)]
     raw = f"<screen>{json.dumps(grid)}</screen>\nRed screen."
     mock_client = MagicMock()
@@ -129,8 +128,6 @@ def test_parse_reply_returns_text_and_none_when_no_screen_tag():
 
 
 def test_parse_reply_extracts_grid_and_strips_screen_tag():
-    import json
-
     grid = [["#abcdef"] * 16 for _ in range(16)]
     raw = f"<screen>{json.dumps(grid)}</screen>\nSome reply."
     text, returned_grid = parse_reply(raw)

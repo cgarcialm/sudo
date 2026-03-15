@@ -1,3 +1,5 @@
+import pathlib
+
 try:
     import pygame
 
@@ -59,8 +61,6 @@ class ScreenRenderer:
         """Save the current grid as a PNG. No-op if display is unavailable."""
         if self._surface is None:
             return
-        import pathlib
-
         pathlib.Path(path).parent.mkdir(parents=True, exist_ok=True)
         pygame.image.save(self._surface, path)
 
