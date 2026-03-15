@@ -4,94 +4,101 @@
 
 Docker on Mac proves the setup works before the Pi arrives.
 
-```
-Your Mac
-└── Docker container (ARM64/Linux)
-    └── Python (main.py)
-        └── HTTPS ──► Anthropic API ──► Claude
-                                         │
-                  response (text) ◄──────┘
+```mermaid
+flowchart LR
+    subgraph Mac
+        Docker["Docker Container\nARM64/Linux"]
+        Python["Python\nmain.py"]
+        Docker --> Python
+    end
+
+    Python -->|HTTPS| API["Anthropic API"]
+    API --> Claude
+    Claude -->|response| Python
 ```
 
 ## Phase 2: Chat
 
 Pi runs a web server. You chat with Sudo from a browser.
 
-```
-Your Phone / Mac
-└── Browser ──► http://sudo.local
-                      │
-               ┌──────▼──────────────┐
-               │   Raspberry Pi      │
-               │   FastAPI server    │──── HTTPS ───► Anthropic API
-               │   conversation      │◄─── response ──    │
-               │   history           │                  Claude
-               └─────────────────────┘
+```mermaid
+flowchart LR
+    User["Your Phone / Mac\n(browser)"]
 
-Remote access (outside home): TBD
+    subgraph Pi["Raspberry Pi"]
+        Server["FastAPI Server"]
+        History["Conversation History"]
+        Server <--> History
+    end
+
+    User -->|http://sudo.local| Server
+    Server -->|HTTPS| API["Anthropic API"]
+    API --> Claude
+    Claude -->|text response| Server
 ```
+
+Remote access outside home network: TBD
 
 ## Phase 3: Face
 
-Pi drives an animated face on its screen. Claude decides the emotion.
+Claude decides Sudo's emotion, rendered on screen.
 
-```
-Your Phone / Mac
-└── Browser ──► http://sudo.local
-                      │
-               ┌──────▼──────────────┐
-               │   Raspberry Pi      │
-               │   FastAPI server    │──── HTTPS ───► Anthropic API
-               │                     │◄─── text + emotion ──  │
-               │   face renderer     │                      Claude
-               └──────┬──────────────┘
-                      │
-                   Screen
-               (animated face)
+```mermaid
+flowchart LR
+    User["Your Phone / Mac\n(browser)"]
+
+    subgraph Pi["Raspberry Pi"]
+        Server["FastAPI Server"]
+        Face["Face Renderer"]
+    end
+
+    User -->|http://sudo.local| Server
+    Server -->|HTTPS| API["Anthropic API"]
+    API --> Claude
+    Claude -->|text + emotion| Server
+    Server --> Face
+    Face --> Screen
 ```
 
 ## Phase 4: Vision
 
 Camera frames are sent to Claude. Claude can now see.
 
-```
-Camera
-  │
-  ▼
-               ┌─────────────────────┐
-               │   Raspberry Pi      │
-               │                     │──── HTTPS ───► Anthropic API
-               │   captures frame    │  (text + image)      │
-               │   compresses it     │◄─── response ──    Claude
-               │                     │                  (sees + thinks)
-               └─────────────────────┘
+```mermaid
+flowchart LR
+    Camera -->|frame| Pi
+
+    subgraph Pi["Raspberry Pi"]
+        Capture["Capture & Compress\nframe"]
+    end
+
+    Pi -->|HTTPS\ntext + image| API["Anthropic API"]
+    API --> Claude["Claude\n(sees + thinks)"]
+    Claude -->|response| Pi
 ```
 
 ## Phase 5: Autonomy
 
-You give Sudo a goal. Claude uses the camera to navigate, motor by motor.
+You give Sudo a goal. Claude navigates using the camera.
 
-```
-You: "go to the door"
-        │
-        ▼
-               ┌─────────────────────┐
-               │   Raspberry Pi      │
-  Camera ─────►│                     │──── HTTPS ───► Anthropic API
-               │   capture frame     │  (goal + image)      │
-               │   send to Claude    │◄─── command ──     Claude
-               │   execute command   │    (forward /     (decides
-               │   repeat            │    left / right /  next move)
-               │                     │     stop)
-               └──────┬──────────────┘
-                      │
-          ┌───────────┼───────────┐
-          │           │           │
-        Motors      LEDs       Speaker
-      (movement)  (reaction)  (optional)
+```mermaid
+flowchart TB
+    You["You: 'go to the door'"] --> Pi
 
-Hardware safety: ultrasonic sensor cuts motors if obstacle < threshold,
-regardless of what Claude says.
+    subgraph Pi["Raspberry Pi"]
+        Loop["Capture frame\n→ send to Claude\n→ execute command\n→ repeat"]
+    end
+
+    Camera -->|frame| Loop
+    Loop -->|goal + image| API["Anthropic API"]
+    API --> Claude["Claude\n(decides next move)"]
+    Claude -->|forward / left\nright / stop| Loop
+
+    Loop --> Motors
+    Loop --> LEDs
+    Loop --> Speaker
+
+    Sensor["Ultrasonic Sensor\n(hardware safety)"] -->|obstacle < threshold\ncut motors| Motors
 ```
 
 ---

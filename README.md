@@ -39,6 +39,7 @@ docker build -t sudo .
 docker run --rm --env-file .env sudo
 ```
 
-## Development Plan
+## Docs
 
-See [PLAN.md](PLAN.md) for the full phase-by-phase plan.
+- [Development Plan](docs/PLAN.md)
+- [Architecture](docs/ARCHITECTURE.md)
