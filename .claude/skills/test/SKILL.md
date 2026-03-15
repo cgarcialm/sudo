@@ -41,7 +41,7 @@ def test_something(mock_anthropic):
 
 ## Steps
 
-1. Read the target file(s) — if `$ARGUMENTS` is provided, use that as the target; otherwise ask
+1. Read the target file(s) — if `$ARGUMENTS` is provided use that, otherwise use `git diff --name-only` to find changed files
 2. Identify what needs testing: functions, classes, edge cases, error handling
 3. Check if a test file already exists in `tests/` — add to it if so, create it if not
 4. Write the tests following the standards above
