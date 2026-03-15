@@ -11,6 +11,8 @@ Sudo is a Raspberry Pi 4 AI robot powered by Claude.
 - LEDs
 - Wheels + motors
 - Body mount
+- Ambient light sensor (e.g. BH1750)
+- Temperature sensor (e.g. DHT22)
 
 ## Phases
 
@@ -36,11 +38,13 @@ Sudo remembers past conversations and genuinely evolves over time.
 - Files live on disk (Pi: `~/sudo/memory/`, dev: Docker volume mount via `-v ./memory:/app/memory`) ✅
 - `identity.md` compressed by Sudo when it grows too large, keeping only what feels significant ✅
 
-### Phase 4: Face
-Animated face UI on the screen.
-- Emotion states displayed as facial expressions
-- Claude controls which emotion to show
-- Reacts to conversation context
+### Phase 4: Screen ✅
+Sudo has a 16×16 pixel screen it can paint however it wants.
+- Every reply includes a 16×16 grid of hex colors Sudo chooses to display ✅
+- Sudo decides what to paint — patterns, symbols, abstract art, nothing — it's its own expression ✅
+- pygame window renders the grid (each pixel = one colored square) ✅
+- Screen persists between replies; Sudo repaints as part of every reply ✅
+- `run.sh` is the canonical way to run Sudo (user and tests share it) ✅
 
 ### Phase 5: Vision
 Camera input sent to Claude.
@@ -48,7 +52,15 @@ Camera input sent to Claude.
 - Send frames to Claude with context
 - Claude interprets what it sees
 
-### Phase 6: Autonomy
+### Phase 6: Body
+Sudo gets a sense of its environment through cheap local sensors. The Pi preprocesses everything and sends compressed text summaries — not raw data — to keep token cost low.
+- **Audio**: local model classifies ambient sound (quiet/loud, voice present/absent, inside/outside) → one-line summary injected into context
+- **Light**: ambient light sensor → time-of-day awareness (day/night/dim)
+- **Temperature**: cheap sensor → hot/cold/comfortable
+- **Time**: always available, always included
+- Principle: process locally, send summaries. "It's quiet, midday, no one in the room." costs almost nothing and gives Sudo a real sense of presence.
+
+### Phase 7: Autonomy
 Sudo moves, reacts, and makes decisions on its own.
 - High-level navigation: user gives a goal ("go to the door"), Claude uses camera frames to decide each movement step
 - Uses `claude-haiku-4-5` for speed and cost efficiency

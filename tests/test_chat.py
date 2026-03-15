@@ -1,10 +1,12 @@
+import io
+import json
 import os
 from unittest.mock import MagicMock, patch
 
 import anthropic
 import pytest
 
-from chat import send_message
+from chat import SYSTEM_PROMPT, parse_reply, send_message
 
 
 @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
@@ -17,9 +19,10 @@ def test_send_message_returns_reply(mock_anthropic):
     )
 
     history = []
-    reply = send_message(mock_client, history, "Hello")
+    text, grid = send_message(mock_client, history, "Hello")
 
-    assert reply == "Hello, I'm Sudo!"
+    assert text == "Hello, I'm Sudo!"
+    assert grid is None
 
 
 @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
@@ -56,15 +59,12 @@ def test_send_message_passes_full_history(mock_anthropic):
 
     call_args = mock_client.messages.create.call_args
     messages_sent = call_args.kwargs["messages"]
-    # history list is mutated in place, so check the third message was the user turn
     assert messages_sent[2] == {"role": "user", "content": "Second message"}
 
 
 @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
 @patch("chat.anthropic.Anthropic")
 def test_send_message_passes_system_prompt(mock_anthropic):
-    from chat import SYSTEM_PROMPT
-
     mock_client = MagicMock()
     mock_anthropic.return_value = mock_client
     mock_client.messages.create.return_value = MagicMock(
@@ -88,3 +88,96 @@ def test_send_message_raises_on_api_error(mock_anthropic):
 
     with pytest.raises(RuntimeError, match="Claude API error"):
         send_message(mock_client, [], "Hello")
+
+
+@patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+@patch("chat.anthropic.Anthropic")
+def test_send_message_strips_screen_from_history(mock_anthropic):
+    """Screen data is not stored in history — only the text reply."""
+    grid_json = json.dumps([["#000000"] * 16 for _ in range(16)])
+    raw = f"<screen>{grid_json}</screen>\nHello!"
+    mock_client = MagicMock()
+    mock_anthropic.return_value = mock_client
+    mock_client.messages.create.return_value = MagicMock(content=[MagicMock(text=raw)])
+
+    history = []
+    send_message(mock_client, history, "Hi")
+
+    assert history[1]["content"] == "Hello!"
+
+
+@patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+@patch("chat.anthropic.Anthropic")
+def test_send_message_returns_grid_when_present(mock_anthropic):
+    grid = [["#ff0000"] * 16 for _ in range(16)]
+    raw = f"<screen>{json.dumps(grid)}</screen>\nRed screen."
+    mock_client = MagicMock()
+    mock_anthropic.return_value = mock_client
+    mock_client.messages.create.return_value = MagicMock(content=[MagicMock(text=raw)])
+
+    history = []
+    text, returned_grid = send_message(mock_client, history, "Hi")
+
+    assert text == "Red screen."
+    assert returned_grid == grid
+
+
+def test_parse_reply_returns_text_and_none_when_no_screen_tag():
+    text, grid = parse_reply("Hello there!")
+    assert text == "Hello there!"
+    assert grid is None
+
+
+def test_parse_reply_extracts_grid_and_strips_screen_tag():
+    grid = [["#abcdef"] * 16 for _ in range(16)]
+    raw = f"<screen>{json.dumps(grid)}</screen>\nSome reply."
+    text, returned_grid = parse_reply(raw)
+    assert text == "Some reply."
+    assert returned_grid == grid
+
+
+def test_parse_reply_when_invalid_json_in_screen_tag():
+    raw = "<screen>not valid json</screen>\nHello."
+    text, grid = parse_reply(raw)
+    assert text == "Hello."
+    assert grid is None
+
+
+def test_parse_reply_trims_whitespace():
+    raw = "  Plain reply with spaces.  "
+    text, grid = parse_reply(raw)
+    assert text == "Plain reply with spaces."
+    assert grid is None
+
+
+@patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+@patch("chat.reflect_and_update_identity")
+@patch("chat.ScreenRenderer")
+@patch("chat.anthropic.Anthropic")
+def test_run_chat_renders_grid_from_reply(
+    mock_anthropic, mock_renderer_cls, _mock_reflect
+):
+    """run_chat passes the parsed grid to renderer.render()."""
+    grid = [["#ff0000"] * 16 for _ in range(16)]
+    raw = f"Hello!\n<screen>{json.dumps(grid)}</screen>"
+
+    mock_client = MagicMock()
+    mock_anthropic.return_value = mock_client
+
+    # Simulate streaming: stream context manager yields chunks of raw
+    mock_stream = MagicMock()
+    mock_stream.__enter__ = lambda s: s
+    mock_stream.__exit__ = MagicMock(return_value=False)
+    mock_stream.text_stream = iter([raw])
+    mock_client.messages.stream.return_value = mock_stream
+
+    mock_renderer = MagicMock()
+    mock_renderer_cls.return_value = mock_renderer
+
+    from chat import run_chat
+
+    with patch("builtins.input", side_effect=["hello", EOFError]):
+        with patch("sys.stdout", new_callable=io.StringIO):
+            run_chat()
+
+    mock_renderer.render.assert_called_once_with(grid)

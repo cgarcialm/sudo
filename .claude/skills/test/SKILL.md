@@ -60,6 +60,6 @@ def test_something(mock_anthropic):
    - Ask: **what does a user do with the system on the Pi right now?** That interaction is what the Docker test must cover end-to-end.
    - Review `tests/test_docker.py` — if it doesn't reflect the current system behaviour (e.g. a new entrypoint was added, the interaction model changed), update it before running.
    - The mock server in `conftest.py` stands in for the real Anthropic API — pipe real stdin, check real stdout, verify the full flow works inside the container.
-   - Build the image: `docker build --platform linux/arm64 -t sudo .`
+   - The `docker_image` fixture in `conftest.py` builds the image automatically — no manual build step needed.
    - Run: `pytest tests/test_docker.py -v`
    - Verify the test covers the actual user interaction, not just "exits cleanly"

@@ -62,9 +62,9 @@ flowchart LR
     Chat -->|reflect + update on exit| Memory
 ```
 
-## Phase 4: Face (pushed from Phase 3)
+## Phase 4: Screen ✅
 
-Claude decides Sudo's emotion, rendered on screen.
+Every reply includes a 16×16 pixel grid Sudo paints however it wants. Rendered live via pygame; saved as `memory/screen.png`.
 
 ```mermaid
 flowchart LR
@@ -72,18 +72,20 @@ flowchart LR
 
     subgraph Pi["Raspberry Pi"]
         Chat["chat.py"]
-        Face["Face Renderer"]
+        Screen["ScreenRenderer\n(screen.py)"]
+        PNG["memory/screen.png"]
     end
 
     User -->|input| Chat
     Chat -->|HTTPS| API["Anthropic API"]
     API --> Claude
-    Claude -->|text + emotion| Chat
-    Chat --> Face
-    Face --> Screen
+    Claude -->|"text + &lt;screen&gt; JSON grid"| Chat
+    Chat -->|16×16 hex grid| Screen
+    Screen --> Window["pygame window"]
+    Screen --> PNG
 ```
 
-## Phase 5: Vision (pushed from Phase 4)
+## Phase 5: Vision
 
 Camera frames are sent to Claude. Claude can now see.
 
@@ -100,7 +102,30 @@ flowchart LR
     Claude -->|response| Pi
 ```
 
-## Phase 6: Autonomy (pushed from Phase 5)
+## Phase 6: Body
+
+The Pi preprocesses sensor data locally and sends one-line summaries to Claude — not raw data — to keep token cost low.
+
+```mermaid
+flowchart LR
+    subgraph Sensors
+        Mic["Microphone\n(audio classifier)"]
+        Light["BH1750\n(ambient light)"]
+        Temp["DHT22\n(temperature)"]
+        Clock["System clock"]
+    end
+
+    subgraph Pi["Raspberry Pi"]
+        Summarizer["Local preprocessor\n→ text summary"]
+        Chat["chat.py"]
+    end
+
+    Sensors -->|raw data| Summarizer
+    Summarizer -->|"'It's quiet, midday...'"| Chat
+    Chat -->|HTTPS| API["Anthropic API"]
+```
+
+## Phase 7: Autonomy
 
 You give Sudo a goal. Claude navigates using the camera.
 

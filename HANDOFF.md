@@ -1,50 +1,50 @@
-# Handoff — Phase 3 Persistence
+# Handoff — Phase 4 Screen (complete)
 
 ## Goal
-Give Sudo memory across sessions: conversation history and an evolving self-concept that
-survives container restarts.
+Give Sudo a 16×16 pixel screen it owns and paints however it wants as part of every reply.
 
 ## What was tried
-- Straightforward: `memory.py` module for all disk I/O, wired into `chat.py` on startup/exit.
+- `screen.py` module with a `ScreenRenderer`, wired into `chat.py`
+- `run.sh` script so user and tests share the same Docker run command
+- Docker build automated as a pytest session fixture
+- Streaming added so text appears immediately; `<screen>` block moved to end of reply
+- Image save: `memory/screen.png` written after every render
 
 ## What worked
-- `memory/history.json` — last 50 turns loaded at startup, saved on exit
-- `memory/identity.md` — Sudo rewrites this at the end of every session via a reflection
-  call; injected into the system prompt so Sudo picks up where it left off
-- Identity compressed by Sudo if it exceeds 4000 chars
-- `Dockerfile` declares `VOLUME /app/memory`; mount with `-v ./memory:/app/memory` in dev
-- Sudo correctly remembers users and facts across sessions when the volume is mounted
-- Terminal output polished: blank line before replies, `> Sudo:` prefix, newline after Goodbye
+- `screen.py` — `ScreenRenderer` lazy-inits pygame; silently skips if no display (Docker/headless); `pygame.event.pump()` required on macOS or window never appears
+- `chat.py` — `_stream_reply()` streams text to terminal, suppresses `<screen>` block; `parse_reply()` extracts grid after full response; stores only text in history; `_MODEL` and `_MAX_TOKENS` are module-level constants shared by both API call sites
+- `run.sh` — canonical run script; `MEMORY_DIR` env var overrides memory mount; tests set it to a temp dir
+- `tests/conftest.py` — `docker_image` session fixture auto-builds before Docker tests; surfaces stderr on failure
+- `.flake8` — `.venv` excluded so flake8 doesn't lint installed packages
+- `memory/screen.png` — saved after each render; open with `open memory/screen.png`
+- `.venv/` — local venv via `uv venv && uv pip install -r requirements.txt`
 
 ## What failed
-- Nothing structural failed. One discovery: Sudo initially told users it couldn't remember
-  things — confidently wrong about its own capabilities. The reflection system will naturally
-  correct this over sessions as Sudo learns what it can do.
+- pygame window on macOS didn't appear without `pygame.event.pump()` — added after `pygame.display.flip()`
+- `<screen>` block was leaking to terminal — fixed by moving it to end of reply and suppressing it in the streaming loop
+- `max_tokens=1024` too low for grid JSON + reply — raised to 2048 (now `_MAX_TOKENS`)
 
 ## What's in place
-- `memory.py` — `load_history`, `save_history`, `load_identity`, `save_identity`,
-  `build_system_prompt`, `reflect_and_update_identity`, `_compress_identity`
-- `chat.py` — loads memory on startup, saves + reflects on exit, polished terminal output
-- `tests/test_memory.py` — 12 unit tests
-- `tests/test_docker.py` — 3 Docker integration tests including persistence test
-- `.gitignore` — `memory/` excluded from version control
-- Skills updated: always rebuild Docker image before running Docker tests
+- `screen.py` — `ScreenRenderer`: `render(grid)`, `save(path)`, `stop()`
+- `chat.py` — `parse_reply()`, `SCREEN_PROMPT`, `_stream_reply()`, `_MODEL`, `_MAX_TOKENS`
+- `run.sh` — `./run.sh` to run interactively; `ANTHROPIC_API_KEY` required
+- `memory/screen.png` — latest screen state, saved each reply
+- `docs/ARCHITECTURE.md` — updated with Phase 4 screen diagram, Phase 6 Body, Phase 7 Autonomy
+- `docs/PLAN.md` — Phase 4 ✅, Phase 6 Body added, Phase 7 Autonomy
 
-## Transferring memory to the Pi
-When the Pi arrives, copy the `memory/` folder with `scp`:
-```bash
-scp -r ./memory/ pi@<pi-ip>:~/sudo/memory/
-```
+## Plan update
+Phase ordering updated based on conversation with Cecilia:
+- Phase 5: Vision (camera)
+- Phase 6: Body (cheap local sensors — audio, light, temperature, time — preprocessed on Pi, sent as text summaries to keep token cost low)
+- Phase 7: Autonomy (movement)
 
-## Next steps (Phase 4: Face)
-Animated face UI on the screen — Claude controls which emotion to display.
+Principle for Phase 6: process locally, send summaries not raw data.
+Sensors to add: BH1750 (ambient light), DHT22 (temperature), microphone with local audio classifier.
 
-1. Decide on rendering approach (pygame on the Pi's display, or a minimal HTML canvas served locally)
-2. Define emotion states (e.g. neutral, happy, curious, thinking, surprised)
-3. Change `send_message` to return both text and an emotion tag — Claude responds with
-   structured output (JSON or a simple prefix) so the face can react
-4. Render the face on the Pi's screen, updating on each reply
-5. Test: mock the face renderer in unit tests; Docker test verifies emotion tag is present
-   in the response
-
-**Note:** Pi has arrived but SD card has not — all dev still on Mac via Docker.
+## Next steps (Phase 5: Vision)
+1. Add `camera.py` — capture and compress frames (320×240) using `picamera2` or `opencv`
+2. Encode frame as base64, include in message as image content block
+3. Update `_stream_reply` (or `send_message`) to optionally attach an image
+4. Update system prompt to tell Sudo it can see
+5. Test: mock camera in unit tests; Docker test skips camera (no device available)
+6. Dev: test with a still image file before connecting real camera

@@ -10,6 +10,9 @@ import json
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+_BLACK_GRID = json.dumps([["#000000"] * 16 for _ in range(16)])
+_MOCK_REPLY = f"Hello from mock!\n<screen>{_BLACK_GRID}</screen>"
+
 
 class MockAnthropicHandler(BaseHTTPRequestHandler):
     def do_POST(self):
@@ -21,7 +24,7 @@ class MockAnthropicHandler(BaseHTTPRequestHandler):
             "id": "msg_mock123",
             "type": "message",
             "role": "assistant",
-            "content": [{"type": "text", "text": "Hello from mock!"}],
+            "content": [{"type": "text", "text": _MOCK_REPLY}],
             "model": "claude-sonnet-4-6",
             "stop_reason": "end_turn",
             "usage": {"input_tokens": 10, "output_tokens": 8},

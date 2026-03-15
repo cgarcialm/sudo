@@ -1,38 +1,42 @@
+import os
 import pathlib
 import platform
 import subprocess
 import tempfile
 
 
-def _docker_run(base_url, extra_args, stdin):
+def _run_sudo(extra_args, stdin, memory_dir=None):
+    """Run Sudo via run.sh, injecting extra docker args and piping stdin."""
+    is_darwin = platform.system() == "Darwin"
+    base_url = (
+        "http://host.docker.internal:8765" if is_darwin else "http://localhost:8765"
+    )
+    network_args = [] if is_darwin else ["--network", "host"]
+
+    env = {
+        **os.environ,
+        "ANTHROPIC_API_KEY": "test-key",
+    }
+    if memory_dir:
+        env["MEMORY_DIR"] = memory_dir
+
     return subprocess.run(
         [
-            "docker",
-            "run",
-            "--rm",
-            "-i",
-            *extra_args,
-            "-e",
-            "ANTHROPIC_API_KEY=test-key",
+            "./run.sh",
             "-e",
             f"ANTHROPIC_BASE_URL={base_url}",
-            "sudo",
+            *network_args,
+            *extra_args,
         ],
         input=stdin,
         capture_output=True,
         text=True,
+        env=env,
     )
 
 
 def test_chat_single_turn(mock_anthropic_server):
-    base_url = (
-        "http://host.docker.internal:8765"
-        if platform.system() == "Darwin"
-        else "http://localhost:8765"
-    )
-    extra_args = [] if platform.system() == "Darwin" else ["--network", "host"]
-
-    result = _docker_run(base_url, extra_args, stdin="hello\nexit\n")
+    result = _run_sudo([], stdin="hello\nexit\n")
 
     assert result.returncode == 0
     assert "Sudo:" in result.stdout
@@ -40,33 +44,25 @@ def test_chat_single_turn(mock_anthropic_server):
 
 def test_chat_multi_turn(mock_anthropic_server):
     """Two messages are sent and two replies are received in the same session."""
-    base_url = (
-        "http://host.docker.internal:8765"
-        if platform.system() == "Darwin"
-        else "http://localhost:8765"
-    )
-    extra_args = [] if platform.system() == "Darwin" else ["--network", "host"]
-
-    result = _docker_run(
-        base_url, extra_args, stdin="first message\nsecond message\nexit\n"
-    )
+    result = _run_sudo([], stdin="first message\nsecond message\nexit\n")
 
     assert result.returncode == 0
     assert result.stdout.count("Sudo:") == 2
 
 
+def test_screen_tag_stripped_from_output(mock_anthropic_server):
+    """<screen> blocks are parsed internally and never shown in the terminal."""
+    result = _run_sudo([], stdin="hello\nexit\n")
+
+    assert result.returncode == 0
+    assert "<screen>" not in result.stdout
+    assert "Sudo:" in result.stdout
+
+
 def test_memory_written_after_session(mock_anthropic_server):
     """history.json and identity.md are written to the mounted memory volume."""
-    base_url = (
-        "http://host.docker.internal:8765"
-        if platform.system() == "Darwin"
-        else "http://localhost:8765"
-    )
-    extra_args = [] if platform.system() == "Darwin" else ["--network", "host"]
-
     with tempfile.TemporaryDirectory(dir="/tmp") as tmp_dir:
-        memory_args = ["-v", f"{tmp_dir}:/app/memory"]
-        result = _docker_run(base_url, extra_args + memory_args, stdin="hello\nexit\n")
+        result = _run_sudo([], stdin="hello\nexit\n", memory_dir=tmp_dir)
 
         assert result.returncode == 0
         assert pathlib.Path(tmp_dir, "history.json").exists()
