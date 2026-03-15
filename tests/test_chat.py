@@ -1,3 +1,4 @@
+import io
 import json
 import os
 from unittest.mock import MagicMock, patch
@@ -147,3 +148,36 @@ def test_parse_reply_trims_whitespace():
     text, grid = parse_reply(raw)
     assert text == "Plain reply with spaces."
     assert grid is None
+
+
+@patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+@patch("chat.reflect_and_update_identity")
+@patch("chat.ScreenRenderer")
+@patch("chat.anthropic.Anthropic")
+def test_run_chat_renders_grid_from_reply(
+    mock_anthropic, mock_renderer_cls, _mock_reflect
+):
+    """run_chat passes the parsed grid to renderer.render()."""
+    grid = [["#ff0000"] * 16 for _ in range(16)]
+    raw = f"Hello!\n<screen>{json.dumps(grid)}</screen>"
+
+    mock_client = MagicMock()
+    mock_anthropic.return_value = mock_client
+
+    # Simulate streaming: stream context manager yields chunks of raw
+    mock_stream = MagicMock()
+    mock_stream.__enter__ = lambda s: s
+    mock_stream.__exit__ = MagicMock(return_value=False)
+    mock_stream.text_stream = iter([raw])
+    mock_client.messages.stream.return_value = mock_stream
+
+    mock_renderer = MagicMock()
+    mock_renderer_cls.return_value = mock_renderer
+
+    from chat import run_chat
+
+    with patch("builtins.input", side_effect=["hello", EOFError]):
+        with patch("sys.stdout", new_callable=io.StringIO):
+            run_chat()
+
+    mock_renderer.render.assert_called_once_with(grid)
