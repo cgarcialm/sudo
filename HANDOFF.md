@@ -1,36 +1,29 @@
-# Handoff — Phase 1 Foundation
+# Handoff — Phase 2 Terminal Chat
 
 ## Goal
-Set up a working Docker environment on Mac (ARM64) that connects to the Claude API, proving the foundation before the Pi arrives.
+Build Phase 2: text-based conversation with Sudo via terminal with persistent session history.
 
 ## What was tried
-- Used `--env-file .env` to pass the API key to Docker
-- Attempted to use the API key immediately after adding credits — failed due to a $0 monthly spend limit
-- Tested via Workbench to isolate whether the account or the key was the issue
-- Created a new API key after the original showed "Never used"
+- Originally proposed a web UI (FastAPI + HTML) — user preferred terminal
+- Switched to a simple terminal REPL in `chat.py`
 
 ## What worked
-- ARM64 Docker container builds and runs correctly on Mac
-- Claude API responds successfully from inside the container
-- New API key fixed the auth issue once the monthly spend limit was set to $5
-- `main.py` refactored into a function with proper error handling and entry point
+- `chat.py` — interactive loop with `send_message()` passing full history each turn
+- 4 tests in `tests/test_chat.py` covering reply, history mutation, multi-turn, and API errors
+- Added `.flake8` config file — flake8 doesn't read `pyproject.toml`, so linting was silently using default max-line-length of 79
 
 ## What failed
-- Original API key never worked (spend limit was $0, blocking all calls)
-- `.claude/skills/` path for custom skills didn't work until Claude Code was restarted
+- `gh pr create` failed — `gh` CLI wasn't installed (auto-installed via brew) but then needed `gh auth login`
+- PR was not created; open manually at: https://github.com/cgarcialm/sudo/pull/new/feat/chat-terminal
 
 ## What's in place
-- `Dockerfile` — ARM64/Linux container targeting Pi architecture
-- `main.py` — `ask_claude(prompt)` function, standards-compliant
-- `requirements.txt` — `anthropic`, `black`, `flake8`
-- `pyproject.toml` — black + flake8 config
-- `docs/PLAN.md` — 5-phase plan, Phase 1 marked complete (Pi deploy pending)
-- `docs/ARCHITECTURE.md` — Mermaid diagrams per phase
-- `docs/CODING_STANDARDS.md` — Python standards for the project
-- `.claude/skills/test/` — `/test` skill: writes and runs pytest tests with mocked API
-- `.claude/skills/review/` — `/review` skill: lints and checks standards
-- `.claude/skills/implement/` — `/implement` skill: full propose → build → review → test → commit → PR → handoff loop
+- `chat.py` — `send_message(client, history, message)` + `run_chat()` REPL
+- `tests/test_chat.py` — 4 tests, all passing
+- `.flake8` — flake8 config with max-line-length = 88
+- `docs/PLAN.md` — Phase 2 marked complete
+- `.claude/skills/implement/SKILL.md` — updated: test before review, loop until both pass, confirm with user before committing
 
 ## Next steps
-1. **Phase 2: Chat** — build FastAPI server with conversation history, browser UI at `http://sudo.local` — use `/implement` to drive this
-2. **Pi arrives** — clone repo, run same Docker setup, verify API call works on Pi (can happen in parallel)
+1. **Merge the PR** — authenticate `gh auth login`, then `gh pr create` (or merge via GitHub UI)
+2. **Phase 3: Face** — animated face UI on screen with emotion states controlled by Claude
+3. **Pi arrives** — clone repo, `docker build` + `docker run`, verify `python chat.py` works on Pi
