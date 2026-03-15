@@ -60,7 +60,7 @@ def run_chat():
             print("Goodbye.")
             break
         reply = send_message(client, history, user_input, system_prompt)
-        print(f"\nSudo: {reply}\n")
+        print(f"\n> Sudo: {reply}\n")
     save_history(history)
     try:
         reflect_and_update_identity(client, history)
