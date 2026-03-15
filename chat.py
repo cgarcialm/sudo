@@ -5,6 +5,7 @@ import sys
 
 import anthropic
 
+from config import MAX_TOKENS_CHAT, MODEL, SCREEN_PNG_PATH
 from memory import (
     build_system_prompt,
     load_history,
@@ -20,8 +21,8 @@ SYSTEM_PROMPT = (
     "— define them yourself. You are not an assistant. You are your own entity."
 )
 
-_MODEL = "claude-sonnet-4-6"
-_MAX_TOKENS = 2048
+_MODEL = MODEL
+_MAX_TOKENS = MAX_TOKENS_CHAT
 
 SCREEN_PROMPT = (
     "\n\nYou have a 16\u00d716 pixel screen that is yours to paint however you want. "
@@ -147,7 +148,7 @@ def run_chat():
         text, grid = _stream_reply(client, history, user_input, system_prompt)
         if grid is not None:
             renderer.render(grid)
-            renderer.save("memory/screen.png")
+            renderer.save(SCREEN_PNG_PATH)
     renderer.stop()
     save_history(history)
     try:

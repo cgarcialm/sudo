@@ -3,10 +3,14 @@ import pathlib
 
 import anthropic
 
-HISTORY_PATH = "memory/history.json"
-IDENTITY_PATH = "memory/identity.md"
-MAX_HISTORY_TURNS = 50
-IDENTITY_MAX_CHARS = 4000
+from config import (
+    HISTORY_PATH,
+    IDENTITY_MAX_CHARS,
+    IDENTITY_PATH,
+    MAX_HISTORY_TURNS,
+    MAX_TOKENS_MEMORY,
+    MODEL,
+)
 
 _REFLECT_PROMPT = (
     "The conversation above just ended. Rewrite your identity file to capture "
@@ -23,11 +27,11 @@ _COMPRESS_PROMPT = (
 
 def load_history(path=HISTORY_PATH):
     """Load conversation history from disk. Returns [] if file is missing."""
-    p = pathlib.Path(path)
-    if not p.exists():
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except FileNotFoundError:
         return []
-    with open(p) as f:
-        return json.load(f)
 
 
 def save_history(history, path=HISTORY_PATH, max_turns=MAX_HISTORY_TURNS):
@@ -65,8 +69,8 @@ def reflect_and_update_identity(client, history, path=IDENTITY_PATH):
     messages = list(history) + [{"role": "user", "content": _REFLECT_PROMPT}]
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
+            model=MODEL,
+            max_tokens=MAX_TOKENS_MEMORY,
             messages=messages,
         )
         new_identity = response.content[0].text
@@ -82,8 +86,8 @@ def _compress_identity(client, identity):
     """Ask Claude to condense a too-long identity file."""
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
+            model=MODEL,
+            max_tokens=MAX_TOKENS_MEMORY,
             messages=[{"role": "user", "content": f"{_COMPRESS_PROMPT}\n\n{identity}"}],
         )
         return response.content[0].text
