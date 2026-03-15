@@ -1,48 +1,50 @@
-# Handoff — Phase 2 Terminal Chat
+# Handoff — Phase 3 Persistence
 
 ## Goal
-Build Phase 2: text-based conversation with Sudo via terminal with persistent session history.
+Give Sudo memory across sessions: conversation history and an evolving self-concept that
+survives container restarts.
 
 ## What was tried
-- Originally proposed a web UI (FastAPI + HTML) — user preferred terminal
-- Switched to a simple terminal REPL in `chat.py`
+- Straightforward: `memory.py` module for all disk I/O, wired into `chat.py` on startup/exit.
 
 ## What worked
-- `chat.py` — interactive loop with `send_message()` passing full history each turn
-- 5 tests in `tests/test_chat.py` covering reply, history mutation, multi-turn, system prompt, and API errors
-- 2 Docker integration tests in `tests/test_docker.py` — single-turn and multi-turn inside ARM64 container with mock API
-- Added `.flake8` config file — flake8 doesn't read `pyproject.toml`
-- Sudo has its own evolving personality (not an assistant) — system prompt lets Claude define it
-- Manual multi-turn test confirmed history works across turns in the same session
+- `memory/history.json` — last 50 turns loaded at startup, saved on exit
+- `memory/identity.md` — Sudo rewrites this at the end of every session via a reflection
+  call; injected into the system prompt so Sudo picks up where it left off
+- Identity compressed by Sudo if it exceeds 4000 chars
+- `Dockerfile` declares `VOLUME /app/memory`; mount with `-v ./memory:/app/memory` in dev
+- Sudo correctly remembers users and facts across sessions when the volume is mounted
+- Terminal output polished: blank line before replies, `> Sudo:` prefix, newline after Goodbye
 
 ## What failed
-- Original system prompt said "friendly assistant" — Claude kept defaulting to assistant behaviour until prompt was rewritten
-- Docker test was initially missing for `chat.py` — caught during review loop
-
-## Skills improved this session
-- `implement` — test before review, loop back on any gap including user feedback, wait for PR merge
-- `review` — check docs consistency and Docker test coverage
-- `test` — Docker test must cover what the system actually does on the Pi, not just "exits cleanly"
+- Nothing structural failed. One discovery: Sudo initially told users it couldn't remember
+  things — confidently wrong about its own capabilities. The reflection system will naturally
+  correct this over sessions as Sudo learns what it can do.
 
 ## What's in place
-- `chat.py` — `send_message()` + `run_chat()` REPL, Sudo's own personality
-- `tests/test_chat.py` — 5 unit tests
-- `tests/test_docker.py` — 2 Docker integration tests (single + multi-turn)
-- `.flake8` — flake8 config
-- `docs/PLAN.md` — Phase 2 complete, Phase 3 (Persistence) added, Phases 4–6 renumbered
-- `docs/ARCHITECTURE.md` — all phases updated
+- `memory.py` — `load_history`, `save_history`, `load_identity`, `save_identity`,
+  `build_system_prompt`, `reflect_and_update_identity`, `_compress_identity`
+- `chat.py` — loads memory on startup, saves + reflects on exit, polished terminal output
+- `tests/test_memory.py` — 12 unit tests
+- `tests/test_docker.py` — 3 Docker integration tests including persistence test
+- `.gitignore` — `memory/` excluded from version control
+- Skills updated: always rebuild Docker image before running Docker tests
 
-## Next steps (Phase 3: Persistence)
-Sudo remembers past conversations and genuinely evolves over time. Two files on disk:
+## Transferring memory to the Pi
+When the Pi arrives, copy the `memory/` folder with `scp`:
+```bash
+scp -r ./memory/ pi@<pi-ip>:~/sudo/memory/
+```
 
-1. **`memory/history.json`** — rolling window of last N conversation turns, loaded at startup and appended each session
-2. **`memory/identity.md`** — Sudo's self-concept: personality traits, opinions, observations — written and updated by Sudo itself at the end of each session via a reflection call to Claude
+## Next steps (Phase 4: Face)
+Animated face UI on the screen — Claude controls which emotion to display.
 
-Implementation order:
-1. Load/save `history.json` on startup/exit — rolling window (last 50 messages)
-2. Create `identity.md` on first run via a Claude call ("who are you?"), inject into system prompt
-3. On `exit`, Sudo reflects on the session and updates `identity.md` autonomously
-4. Add Docker volume mount in dev so memory survives container restarts
-5. Compress `identity.md` when it exceeds a size threshold (Sudo decides what to keep)
+1. Decide on rendering approach (pygame on the Pi's display, or a minimal HTML canvas served locally)
+2. Define emotion states (e.g. neutral, happy, curious, thinking, surprised)
+3. Change `send_message` to return both text and an emotion tag — Claude responds with
+   structured output (JSON or a simple prefix) so the face can react
+4. Render the face on the Pi's screen, updating on each reply
+5. Test: mock the face renderer in unit tests; Docker test verifies emotion tag is present
+   in the response
 
-**Note:** SD card not yet arrived — Pi deploy still pending. All dev on Mac via Docker.
+**Note:** Pi has arrived but SD card has not — all dev still on Mac via Docker.
