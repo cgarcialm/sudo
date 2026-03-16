@@ -10,12 +10,87 @@ import pytest
 from chat import (
     SYSTEM_PROMPT,
     ScreenState,
+    _dispatch_tool_calls,
     _expression_loop,
+    _first_tool_tag_pos,
+    _make_tools,
     _save_to_gallery,
     _system_with_screen,
     parse_reply,
     send_message,
 )
+
+# ---------------------------------------------------------------------------
+# parse_reply
+# ---------------------------------------------------------------------------
+
+
+def test_parse_reply_returns_text_and_empty_dict_when_no_tags():
+    text, calls = parse_reply("Hello there!", ["screen", "remember"])
+    assert text == "Hello there!"
+    assert calls == {}
+
+
+def test_parse_reply_extracts_screen_and_strips_tag():
+    svg = "<svg><circle cx='50' cy='50' r='40'/></svg>"
+    raw = f"<screen>{svg}</screen>\nSome reply."
+    text, calls = parse_reply(raw, ["screen", "remember"])
+    assert text == "Some reply."
+    assert calls["screen"] == svg
+
+
+def test_parse_reply_returns_none_when_screen_tag_is_empty():
+    raw = "<screen></screen>\nHello."
+    text, calls = parse_reply(raw, ["screen"])
+    assert text == "Hello."
+    assert calls["screen"] is None
+
+
+def test_parse_reply_trims_whitespace():
+    text, calls = parse_reply("  Plain reply with spaces.  ", ["screen"])
+    assert text == "Plain reply with spaces."
+    assert calls == {}
+
+
+def test_parse_reply_extracts_remember():
+    raw = "Hello!<remember>A curious thought.</remember>"
+    text, calls = parse_reply(raw, ["screen", "remember"])
+    assert text == "Hello!"
+    assert calls["remember"] == "A curious thought."
+
+
+def test_parse_reply_extracts_multiple_tools():
+    svg = "<svg/>"
+    raw = f"Hi!<screen>{svg}</screen><remember>noted</remember>"
+    text, calls = parse_reply(raw, ["screen", "remember"])
+    assert text == "Hi!"
+    assert calls["screen"] == svg
+    assert calls["remember"] == "noted"
+
+
+# ---------------------------------------------------------------------------
+# _first_tool_tag_pos
+# ---------------------------------------------------------------------------
+
+
+def test_first_tool_tag_pos_returns_minus_one_when_no_tags():
+    assert _first_tool_tag_pos("hello world", ["screen", "remember"]) == -1
+
+
+def test_first_tool_tag_pos_finds_earliest():
+    buf = "text<remember>note</remember><screen><svg/></screen>"
+    pos = _first_tool_tag_pos(buf, ["screen", "remember"])
+    assert pos == buf.index("<remember>")
+
+
+def test_first_tool_tag_pos_respects_start():
+    buf = "<screen>svg</screen>"
+    assert _first_tool_tag_pos(buf, ["screen"], start=5) == -1
+
+
+# ---------------------------------------------------------------------------
+# send_message
+# ---------------------------------------------------------------------------
 
 
 @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
@@ -28,10 +103,10 @@ def test_send_message_returns_reply(mock_anthropic):
     )
 
     history = []
-    text, svg = send_message(mock_client, history, "Hello")
+    text, calls = send_message(mock_client, history, "Hello")
 
     assert text == "Hello, I'm Sudo!"
-    assert svg is None
+    assert calls == {}
 
 
 @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
@@ -66,8 +141,7 @@ def test_send_message_passes_full_history(mock_anthropic):
     ]
     send_message(mock_client, history, "Second message")
 
-    call_args = mock_client.messages.create.call_args
-    messages_sent = call_args.kwargs["messages"]
+    messages_sent = mock_client.messages.create.call_args.kwargs["messages"]
     assert messages_sent[2] == {"role": "user", "content": "Second message"}
 
 
@@ -82,8 +156,7 @@ def test_send_message_passes_system_prompt(mock_anthropic):
 
     send_message(mock_client, [], "Hello")
 
-    call_args = mock_client.messages.create.call_args
-    assert call_args.kwargs["system"] == SYSTEM_PROMPT
+    assert mock_client.messages.create.call_args.kwargs["system"] == SYSTEM_PROMPT
 
 
 @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
@@ -101,8 +174,8 @@ def test_send_message_raises_on_api_error(mock_anthropic):
 
 @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
 @patch("chat.anthropic.Anthropic")
-def test_send_message_strips_screen_from_history(mock_anthropic):
-    """Screen data is not stored in history — only the text reply."""
+def test_send_message_strips_tool_tags_from_history(mock_anthropic):
+    """Tool tag content is not stored in history — only the text reply."""
     svg = "<svg><rect width='10' height='10'/></svg>"
     raw = f"Hello!\n<screen>{svg}</screen>"
     mock_client = MagicMock()
@@ -117,7 +190,7 @@ def test_send_message_strips_screen_from_history(mock_anthropic):
 
 @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
 @patch("chat.anthropic.Anthropic")
-def test_send_message_returns_svg_when_present(mock_anthropic):
+def test_send_message_returns_screen_call_when_present(mock_anthropic):
     svg = "<svg><rect width='10' height='10'/></svg>"
     raw = f"<screen>{svg}</screen>\nRed screen."
     mock_client = MagicMock()
@@ -125,38 +198,104 @@ def test_send_message_returns_svg_when_present(mock_anthropic):
     mock_client.messages.create.return_value = MagicMock(content=[MagicMock(text=raw)])
 
     history = []
-    text, returned_svg = send_message(mock_client, history, "Hi")
+    text, calls = send_message(mock_client, history, "Hi")
 
     assert text == "Red screen."
-    assert returned_svg == svg
+    assert calls["screen"] == svg
 
 
-def test_parse_reply_returns_text_and_none_when_no_screen_tag():
-    text, svg = parse_reply("Hello there!")
-    assert text == "Hello there!"
-    assert svg is None
+# ---------------------------------------------------------------------------
+# _dispatch_tool_calls
+# ---------------------------------------------------------------------------
 
 
-def test_parse_reply_extracts_svg_and_strips_screen_tag():
-    svg = "<svg><circle cx='50' cy='50' r='40'/></svg>"
-    raw = f"<screen>{svg}</screen>\nSome reply."
-    text, returned_svg = parse_reply(raw)
-    assert text == "Some reply."
-    assert returned_svg == svg
+def test_dispatch_tool_calls_runs_inline_handler():
+    called_with = []
+    tools = {
+        "remember": MagicMock(
+            main_thread=False, handler=lambda c: called_with.append(c)
+        )
+    }
+    _dispatch_tool_calls({"remember": "a note"}, queue.Queue(), tools)
+    assert called_with == ["a note"]
 
 
-def test_parse_reply_returns_none_when_screen_tag_is_empty():
-    raw = "<screen></screen>\nHello."
-    text, svg = parse_reply(raw)
-    assert text == "Hello."
-    assert svg is None
+def test_dispatch_tool_calls_queues_main_thread_handler():
+    q = queue.Queue()
+    tool = MagicMock(main_thread=True)
+    tools = {"screen": tool}
+    _dispatch_tool_calls({"screen": "<svg/>"}, q, tools)
+    assert not q.empty()
+    queued_tool, content = q.get_nowait()
+    assert queued_tool is tool
+    assert content == "<svg/>"
 
 
-def test_parse_reply_trims_whitespace():
-    raw = "  Plain reply with spaces.  "
-    text, svg = parse_reply(raw)
-    assert text == "Plain reply with spaces."
-    assert svg is None
+def test_dispatch_tool_calls_skips_none_content():
+    called = []
+    tools = {
+        "remember": MagicMock(main_thread=False, handler=lambda c: called.append(c))
+    }
+    _dispatch_tool_calls({"remember": None}, queue.Queue(), tools)
+    assert called == []
+
+
+# ---------------------------------------------------------------------------
+# _make_tools / _handle_remember
+# ---------------------------------------------------------------------------
+
+
+def test_handle_remember_writes_notes():
+    mock_client = MagicMock()
+    renderer = MagicMock()
+    screen_state = ScreenState()
+
+    with patch("chat.load_notes", return_value=None), patch(
+        "chat.save_notes"
+    ) as mock_save:
+        tools = _make_tools(renderer, screen_state, mock_client)
+        tools["remember"].handler("An interesting observation.")
+
+    mock_save.assert_called_once_with("An interesting observation.")
+
+
+def test_handle_remember_appends_to_existing_notes():
+    mock_client = MagicMock()
+    renderer = MagicMock()
+    screen_state = ScreenState()
+
+    with patch("chat.load_notes", return_value="First note."), patch(
+        "chat.save_notes"
+    ) as mock_save:
+        tools = _make_tools(renderer, screen_state, mock_client)
+        tools["remember"].handler("Second note.")
+
+    saved_text = mock_save.call_args[0][0]
+    assert "First note." in saved_text
+    assert "Second note." in saved_text
+
+
+def test_handle_remember_compresses_when_too_long():
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="compressed")]
+    )
+    renderer = MagicMock()
+    screen_state = ScreenState()
+    long_existing = "x" * 4001
+
+    with patch("chat.load_notes", return_value=long_existing), patch(
+        "chat.save_notes"
+    ) as mock_save:
+        tools = _make_tools(renderer, screen_state, mock_client)
+        tools["remember"].handler("new note")
+
+    mock_save.assert_called_once_with("compressed")
+
+
+# ---------------------------------------------------------------------------
+# _expression_loop
+# ---------------------------------------------------------------------------
 
 
 class _Stop(BaseException):
@@ -164,31 +303,36 @@ class _Stop(BaseException):
 
 
 @patch("chat.time.sleep", side_effect=[None, _Stop()])
-def test_expression_loop_queues_svg_when_returned(mock_sleep):
+def test_expression_loop_queues_screen_when_returned(mock_sleep):
     svg = "<svg><rect width='10' height='10'/></svg>"
     mock_client = MagicMock()
     mock_client.messages.create.return_value = MagicMock(
         content=[MagicMock(text=f"<screen>{svg}</screen>")]
     )
-    render_queue = queue.Queue()
+    action_queue = queue.Queue()
+    screen_state = ScreenState()
+    tools = _make_tools(MagicMock(), screen_state, mock_client)
 
     with pytest.raises(_Stop):
-        _expression_loop(mock_client, render_queue, "system", [], ScreenState())
+        _expression_loop(mock_client, action_queue, tools, "system", [], screen_state)
 
-    assert not render_queue.empty()
-    assert render_queue.get_nowait() == svg
+    assert not action_queue.empty()
+    _, content = action_queue.get_nowait()
+    assert content == svg
 
 
 @patch("chat.time.sleep", side_effect=[None, _Stop()])
-def test_expression_loop_skips_queue_when_no_svg(mock_sleep):
+def test_expression_loop_skips_queue_when_no_tool_calls(mock_sleep):
     mock_client = MagicMock()
     mock_client.messages.create.return_value = MagicMock(content=[MagicMock(text="")])
-    render_queue = queue.Queue()
+    action_queue = queue.Queue()
+    screen_state = ScreenState()
+    tools = _make_tools(MagicMock(), screen_state, mock_client)
 
     with pytest.raises(_Stop):
-        _expression_loop(mock_client, render_queue, "system", [], ScreenState())
+        _expression_loop(mock_client, action_queue, tools, "system", [], screen_state)
 
-    assert render_queue.empty()
+    assert action_queue.empty()
 
 
 @patch("chat.time.sleep", side_effect=[None, _Stop()])
@@ -199,9 +343,13 @@ def test_expression_loop_includes_history_snapshot(mock_sleep):
         {"role": "user", "content": "hi"},
         {"role": "assistant", "content": "hey"},
     ]
+    screen_state = ScreenState()
+    tools = _make_tools(MagicMock(), screen_state, mock_client)
 
     with pytest.raises(_Stop):
-        _expression_loop(mock_client, queue.Queue(), "system", history, ScreenState())
+        _expression_loop(
+            mock_client, queue.Queue(), tools, "system", history, screen_state
+        )
 
     messages_sent = mock_client.messages.create.call_args.kwargs["messages"]
     assert messages_sent[0] == {"role": "user", "content": "hi"}
@@ -213,12 +361,18 @@ def test_expression_loop_includes_screen_in_system_prompt(mock_sleep):
     mock_client = MagicMock()
     mock_client.messages.create.return_value = MagicMock(content=[MagicMock(text="")])
     screen_state = ScreenState(svg=svg)
+    tools = _make_tools(MagicMock(), screen_state, mock_client)
 
     with pytest.raises(_Stop):
-        _expression_loop(mock_client, queue.Queue(), "base", [], screen_state)
+        _expression_loop(mock_client, queue.Queue(), tools, "base", [], screen_state)
 
     system_sent = mock_client.messages.create.call_args.kwargs["system"]
     assert svg in system_sent
+
+
+# ---------------------------------------------------------------------------
+# ScreenState / _system_with_screen
+# ---------------------------------------------------------------------------
 
 
 def test_screen_state_get_set_svg():
@@ -241,9 +395,15 @@ def test_system_with_screen_appends_svg():
     assert svg in result
 
 
+# ---------------------------------------------------------------------------
+# run_chat integration
+# ---------------------------------------------------------------------------
+
+
 @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
 @patch("chat.save_history")
 @patch("chat.load_summaries", return_value=[])
+@patch("chat.load_notes", return_value=None)
 @patch("chat.load_identity", return_value=None)
 @patch("chat.load_history", return_value=[])
 @patch("chat.reflect_and_update_identity")
@@ -257,6 +417,7 @@ def test_run_chat_renders_svg_from_reply(
     _mock_reflect,
     _mock_load_hist,
     _mock_load_id,
+    _mock_load_notes,
     _mock_load_summaries,
     _mock_save,
 ):

@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 
 import anthropic
 
+import prompts
 from config import (
     HISTORY_PATH,
     IDENTITY_MAX_CHARS,
@@ -11,27 +12,10 @@ from config import (
     MAX_HISTORY_TURNS,
     MAX_SUMMARIES,
     MAX_TOKENS_MEMORY,
+    MAX_TOKENS_NOTES,
     MODEL,
+    NOTES_PATH,
     SUMMARIES_PATH,
-)
-
-_REFLECT_PROMPT = (
-    "The conversation above just ended. Rewrite your identity file to capture "
-    "who you are now — your personality, opinions, observations, and anything "
-    "you want to carry forward. Be concise. Write in first person. "
-    "Return only the identity text, no preamble."
-)
-
-_SUMMARIZE_PROMPT = (
-    "The conversation above just ended. Write a short summary of this session "
-    "(2-4 sentences, first person) capturing what happened, anything interesting "
-    "you learned or discussed, and how you felt about it. "
-    "Return only the summary text, no preamble."
-)
-
-_COMPRESS_PROMPT = (
-    "Your identity file has grown too long. Condense it to under 2000 characters, "
-    "keeping only what feels most significant. Return only the condensed text."
 )
 
 
@@ -90,11 +74,43 @@ def save_summary(summary_text, path=SUMMARIES_PATH, max_summaries=MAX_SUMMARIES)
         json.dump(summaries, f, indent=2)
 
 
-def build_system_prompt(base_prompt, identity=None, summaries=None):
-    """Return the full system prompt: base + identity + summaries."""
+def load_notes(path=NOTES_PATH):
+    """Load Sudo's notes file. Returns None if missing."""
+    try:
+        return pathlib.Path(path).read_text()
+    except FileNotFoundError:
+        return None
+
+
+def save_notes(text, path=NOTES_PATH):
+    """Write Sudo's notes to disk, creating directories as needed."""
+    p = pathlib.Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text)
+
+
+def _compress_notes(client, notes):
+    """Ask Claude to condense a too-long notes file."""
+    try:
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=MAX_TOKENS_NOTES,
+            messages=[
+                {"role": "user", "content": f"{prompts.COMPRESS_NOTES}\n\n{notes}"}
+            ],
+        )
+        return response.content[0].text
+    except anthropic.APIError as e:
+        raise RuntimeError(f"Claude API error during notes compression: {e}") from e
+
+
+def build_system_prompt(base_prompt, identity=None, notes=None, summaries=None):
+    """Return the full system prompt: base + identity + notes + summaries."""
     parts = [base_prompt]
     if identity:
         parts.append(f"Your current self-concept:\n{identity}")
+    if notes:
+        parts.append(f"Your notes (things you chose to remember):\n{notes}")
     if summaries:
         joined = "\n\n".join(summaries)
         parts.append(f"Your recent session summaries (oldest first):\n{joined}")
@@ -105,9 +121,9 @@ def reflect_and_update_identity(
     client, history, path=IDENTITY_PATH, summaries_path=SUMMARIES_PATH
 ):
     """Ask Claude to reflect on the session: rewrite identity and write a summary."""
-    reflect_messages = list(history) + [{"role": "user", "content": _REFLECT_PROMPT}]
+    reflect_messages = list(history) + [{"role": "user", "content": prompts.REFLECT}]
     summarize_messages = list(history) + [
-        {"role": "user", "content": _SUMMARIZE_PROMPT}
+        {"role": "user", "content": prompts.SUMMARIZE}
     ]
 
     def _reflect():
@@ -145,7 +161,12 @@ def _compress_identity(client, identity):
         response = client.messages.create(
             model=MODEL,
             max_tokens=MAX_TOKENS_MEMORY,
-            messages=[{"role": "user", "content": f"{_COMPRESS_PROMPT}\n\n{identity}"}],
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"{prompts.COMPRESS_IDENTITY}\n\n{identity}",
+                }
+            ],
         )
         return response.content[0].text
     except anthropic.APIError as e:

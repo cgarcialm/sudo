@@ -31,7 +31,10 @@ _MOCK_SVG_EXPRESSION = (
     ' fill="#0d2b0d" font-size="24">expression</text>'
     "</svg>"
 )
-_MOCK_REPLY_CHAT = f"Hello from mock!\n<screen>{_MOCK_SVG_CHAT}</screen>"
+_MOCK_REPLY_CHAT = (
+    f"Hello from mock!\n<screen>{_MOCK_SVG_CHAT}</screen>"
+    "<remember>Mock session note.</remember>"
+)
 _MOCK_REPLY_EXPRESSION = f"<screen>{_MOCK_SVG_EXPRESSION}</screen>"
 
 

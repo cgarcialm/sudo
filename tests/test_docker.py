@@ -83,6 +83,7 @@ def test_memory_written_after_session(mock_anthropic_server):
         assert pathlib.Path(tmp_dir, "history.json").exists()
         assert pathlib.Path(tmp_dir, "identity.md").exists()
         assert pathlib.Path(tmp_dir, "summaries.json").exists()
+        assert pathlib.Path(tmp_dir, "notes.md").exists()
 
 
 def test_expression_loop_fires_without_crashing(mock_anthropic_server):

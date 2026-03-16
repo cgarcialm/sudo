@@ -22,3 +22,7 @@ EXPRESSION_HISTORY_WINDOW = 6
 
 GALLERY_ENABLED = os.environ.get("GALLERY_ENABLED", "false").lower() == "true"
 GALLERY_DIR = "memory/gallery"
+
+NOTES_PATH = "memory/notes.md"
+NOTES_MAX_CHARS = 4000
+MAX_TOKENS_NOTES = 1024
