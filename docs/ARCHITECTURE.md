@@ -130,6 +130,12 @@ flowchart LR
 
 At session end, two Claude calls run in parallel: one rewrites `identity.md`, one writes a short session summary appended to `summaries.json` (rolling window of 10). History is trimmed to 20 turns on save.
 
+## Phase 5b: SVG Gallery ✅
+
+Every rendered SVG is saved to `memory/gallery/YYYY-MM-DD/HH-MM-SS.svg` when `GALLERY_ENABLED=true`. No architectural change — `_save_to_gallery()` is called from `_render_and_save()` as a side effect.
+
+Exit hang fix: `os._exit(0)` is called in `__main__` after `run_chat()` returns. Daemon threads blocked Python's `sys.stdin` cleanup; `os._exit(0)` bypasses it cleanly.
+
 ## Phase 5c: Tool System + Cross-Session Notes ✅
 
 `<screen>` is generalized into a tag-based tool registry. Adding a new output channel means adding one entry to `TOOLS` — no other code changes needed.
