@@ -17,4 +17,9 @@
 #   EXPRESSION_INTERVAL_SECONDS    — optional, override expression loop interval (default 30)
 set -e
 
+# Load .env if present
+if [ -f .env ]; then
+  export $(grep -v '^#' .env | xargs)
+fi
+
 PYTHONPATH=src uv run python src/chat.py
