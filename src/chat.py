@@ -7,14 +7,6 @@ import sys
 import threading
 import time
 
-logging.basicConfig(
-    format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
-    datefmt="%H:%M:%S",
-    stream=sys.stderr,
-)
-log = logging.getLogger("sudo")
-log.setLevel(os.environ.get("LOG_LEVEL", "WARNING").upper())
-
 import anthropic
 
 from config import (
@@ -35,6 +27,8 @@ from memory import (
     save_history,
 )
 from screen import ScreenRenderer
+
+log = logging.getLogger("sudo")
 
 SYSTEM_PROMPT = (
     "Your name is Sudo. You are a robot running on a Raspberry Pi "
@@ -184,7 +178,7 @@ def _expression_loop(client, render_queue, system_prompt, history, screen_state)
                 messages=messages,
             )
             raw = response.content[0].text.strip()
-            log.debug("expression loop got reply (len=%d): %.80r", len(raw), raw)
+            log.debug("expression loop got reply (len=%d): %.80s", len(raw), raw)
             if raw:
                 _, svg = parse_reply(raw)
                 if svg:
@@ -195,7 +189,7 @@ def _expression_loop(client, render_queue, system_prompt, history, screen_state)
             else:
                 log.debug("expression loop: empty reply (Sudo chose not to draw)")
         except Exception as e:
-            print(f"[expression loop] {e}", file=sys.stderr)
+            log.error("expression loop error: %s", e)
 
 
 def _render_and_save(renderer, svg, screen_state):
@@ -213,7 +207,17 @@ def _system_with_screen(system_prompt, screen_state):
     return system_prompt + f"\n\nYour screen is currently showing:\n{svg}"
 
 
+def _setup_logging():
+    logging.basicConfig(
+        format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
+        datefmt="%H:%M:%S",
+        stream=sys.stderr,
+    )
+    log.setLevel(os.environ.get("LOG_LEVEL", "WARNING"))
+
+
 def run_chat():
+    _setup_logging()
     client = build_client()
     history = load_history()
     identity = load_identity()

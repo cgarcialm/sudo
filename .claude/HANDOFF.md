@@ -25,6 +25,12 @@
 - `EXPRESSION_INTERVAL_SECONDS` overridable via env var
 - Mock server returns distinct SVGs: red circle for chat (streaming), green rectangle for expression loop (non-streaming)
 
+### Debug logging
+- `LOG_LEVEL` env var controls log verbosity (default `WARNING`, set to `DEBUG` for expression loop visibility)
+- `dev.sh` sets `LOG_LEVEL=DEBUG` automatically
+- On Pi: `LOG_LEVEL=DEBUG ./run.sh` shows when expression loop fires, what Claude replies, and whether SVGs are queued
+- `_setup_logging()` called from `run_chat()` — no module-level side effects
+
 ### Tests
 - New Docker integration test: `test_expression_loop_fires_without_crashing` — runs Sudo with 2s interval, verifies no crashes
 - `_render_and_save()` helper extracted to remove copy-paste
@@ -33,7 +39,8 @@
 ## Current state
 - All changes on branch `fix/fullscreen-screen`, PR #8 open
 - 52 unit tests + 5 Docker integration tests all passing
-- Pending Pi verification: fullscreen covers full 480×320, expression loop draws autonomously
+- Pi verified: expression loop is working
+- Expression interval: 15s (default; overridable via `EXPRESSION_INTERVAL_SECONDS`)
 
 ## Next steps (Phase 6: Microphone)
 1. Create `src/audio.py` — `AudioCapture` class using `pyaudio`; `transcribe(audio_path) -> str` using `faster-whisper`
