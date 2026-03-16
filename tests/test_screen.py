@@ -40,7 +40,9 @@ def test_tick_is_noop_when_not_initialized():
 @patch("screen.cairosvg", create=True)
 @patch("screen.pygame")
 def test_render_converts_svg_and_blits(mock_pygame, mock_cairosvg):
-    mock_pygame.display.set_mode.return_value = MagicMock()
+    mock_surface = MagicMock()
+    mock_surface.get_size.return_value = (320, 320)
+    mock_pygame.display.set_mode.return_value = mock_surface
     mock_cairosvg.svg2png.return_value = b"fake png"
     renderer = ScreenRenderer()
 
@@ -48,6 +50,7 @@ def test_render_converts_svg_and_blits(mock_pygame, mock_cairosvg):
 
     mock_cairosvg.svg2png.assert_called_once()
     mock_pygame.image.load.assert_called_once()
+    mock_pygame.transform.scale.assert_called_once()
     renderer._surface.blit.assert_called_once()
     renderer.stop()
 

@@ -3,15 +3,25 @@ import pathlib
 import platform
 import subprocess
 import tempfile
+import time
+
+
+def _base_url():
+    if platform.system() == "Darwin":
+        return "http://host.docker.internal:8765"
+    return "http://localhost:8765"
+
+
+def _network_args():
+    if platform.system() == "Darwin":
+        return []
+    return ["--network", "host"]
 
 
 def _run_sudo(extra_args, stdin, memory_dir=None):
     """Run Sudo via run.sh, injecting extra docker args and piping stdin."""
-    is_darwin = platform.system() == "Darwin"
-    base_url = (
-        "http://host.docker.internal:8765" if is_darwin else "http://localhost:8765"
-    )
-    network_args = [] if is_darwin else ["--network", "host"]
+    base_url = _base_url()
+    network_args = _network_args()
 
     env = {
         **os.environ,
@@ -73,3 +83,33 @@ def test_memory_written_after_session(mock_anthropic_server):
         assert pathlib.Path(tmp_dir, "history.json").exists()
         assert pathlib.Path(tmp_dir, "identity.md").exists()
         assert pathlib.Path(tmp_dir, "summaries.json").exists()
+
+
+def test_expression_loop_fires_without_crashing(mock_anthropic_server):
+    """Expression loop fires at least once and does not crash the process."""
+    with tempfile.TemporaryDirectory(dir="/tmp") as tmp_dir:
+        env = {**os.environ, "ANTHROPIC_API_KEY": "test-key", "MEMORY_DIR": tmp_dir}
+        proc = subprocess.Popen(
+            [
+                "./run.sh",
+                "-e",
+                f"ANTHROPIC_BASE_URL={_base_url()}",
+                "-e",
+                "EXPRESSION_INTERVAL_SECONDS=2",
+                *_network_args(),
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+        )
+        proc.stdin.write("hello\n")
+        proc.stdin.flush()
+        time.sleep(4)
+        proc.stdin.write("exit\n")
+        proc.stdin.flush()
+        stdout, stderr = proc.communicate(timeout=30)
+
+    assert proc.returncode == 0
+    assert "[expression loop]" not in stderr

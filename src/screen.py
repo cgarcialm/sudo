@@ -1,5 +1,6 @@
 import io
 import pathlib
+import sys
 
 try:
     import cairosvg
@@ -15,6 +16,7 @@ try:
 except ImportError:
     _PYGAME_AVAILABLE = False
 
+from config import SCREEN_FULLSCREEN as _SCREEN_FULLSCREEN
 from config import SCREEN_SIZE as _SCREEN_SIZE
 
 
@@ -35,7 +37,11 @@ class ScreenRenderer:
             return
         try:
             pygame.init()
-            self._surface = pygame.display.set_mode((_SCREEN_SIZE, _SCREEN_SIZE))
+            if _SCREEN_FULLSCREEN:
+                size, flags = (0, 0), pygame.FULLSCREEN
+            else:
+                size, flags = (_SCREEN_SIZE, _SCREEN_SIZE), 0
+            self._surface = pygame.display.set_mode(size, flags)
             pygame.display.set_caption("Sudo")
             self._surface.fill((0, 0, 0))
             pygame.display.flip()
@@ -53,16 +59,19 @@ class ScreenRenderer:
         if self._surface is None or not _CAIROSVG_AVAILABLE:
             return
         try:
+            w, h = self._surface.get_size()
             png_bytes = cairosvg.svg2png(
                 bytestring=svg_string.encode(),
-                output_width=_SCREEN_SIZE,
-                output_height=_SCREEN_SIZE,
+                output_width=w,
+                output_height=h,
             )
-            img = pygame.image.load(io.BytesIO(png_bytes))
+            img = pygame.transform.scale(
+                pygame.image.load(io.BytesIO(png_bytes)), (w, h)
+            )
             self._surface.blit(img, (0, 0))
             pygame.display.flip()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[screen] render failed: {e}", file=sys.stderr)
 
     def save(self, path):
         """Save the current screen as a PNG. No-op if display is unavailable."""

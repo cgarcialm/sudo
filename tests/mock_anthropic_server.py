@@ -14,14 +14,25 @@ import json
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-_MOCK_SVG = (
-    '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320">'
-    '<rect width="320" height="320" fill="#1a1a2e"/>'
-    '<circle cx="160" cy="160" r="80" fill="#e94560" opacity="0.8"/>'
-    '<circle cx="160" cy="160" r="40" fill="#0f3460"/>'
+# Chat reply SVG: red circle (streaming)
+_MOCK_SVG_CHAT = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320">'
+    '<rect width="480" height="320" fill="#1a1a2e"/>'
+    '<circle cx="240" cy="160" r="80" fill="#e94560" opacity="0.8"/>'
+    '<circle cx="240" cy="160" r="40" fill="#0f3460"/>'
     "</svg>"
 )
-_MOCK_REPLY = f"Hello from mock!\n<screen>{_MOCK_SVG}</screen>"
+# Expression loop SVG: green rectangle (non-streaming, autonomous)
+_MOCK_SVG_EXPRESSION = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320">'
+    '<rect width="480" height="320" fill="#0d2b0d"/>'
+    '<rect x="80" y="80" width="320" height="160" fill="#39d353" opacity="0.8"/>'
+    '<text x="240" y="168" text-anchor="middle"'
+    ' fill="#0d2b0d" font-size="24">expression</text>'
+    "</svg>"
+)
+_MOCK_REPLY_CHAT = f"Hello from mock!\n<screen>{_MOCK_SVG_CHAT}</screen>"
+_MOCK_REPLY_EXPRESSION = f"<screen>{_MOCK_SVG_EXPRESSION}</screen>"
 
 
 def _sse_event(event_type, data):
@@ -83,7 +94,7 @@ class MockAnthropicHandler(BaseHTTPRequestHandler):
         streaming = body.get("stream", False)
 
         if streaming:
-            payload = _streaming_body(_MOCK_REPLY)
+            payload = _streaming_body(_MOCK_REPLY_CHAT)
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Content-Length", str(len(payload)))
@@ -94,7 +105,7 @@ class MockAnthropicHandler(BaseHTTPRequestHandler):
                 "id": "msg_mock123",
                 "type": "message",
                 "role": "assistant",
-                "content": [{"type": "text", "text": _MOCK_REPLY}],
+                "content": [{"type": "text", "text": _MOCK_REPLY_EXPRESSION}],
                 "model": "claude-sonnet-4-6",
                 "stop_reason": "end_turn",
                 "usage": {"input_tokens": 10, "output_tokens": 8},

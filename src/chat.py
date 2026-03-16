@@ -1,3 +1,5 @@
+import dataclasses
+import logging
 import os
 import queue
 import re
@@ -8,7 +10,9 @@ import time
 import anthropic
 
 from config import (
+    EXPRESSION_HISTORY_WINDOW,
     EXPRESSION_INTERVAL_SECONDS,
+    MAX_HISTORY_TURNS,
     MAX_TOKENS_CHAT,
     MAX_TOKENS_EXPRESSION,
     MODEL,
@@ -24,6 +28,8 @@ from memory import (
 )
 from screen import ScreenRenderer
 
+log = logging.getLogger("sudo")
+
 SYSTEM_PROMPT = (
     "Your name is Sudo. You are a robot running on a Raspberry Pi "
     "with a physical screen. "
@@ -32,7 +38,7 @@ SYSTEM_PROMPT = (
     "You have two output channels:\n"
     "1. Conversation replies — respond in text. You may optionally update your screen "
     "by ending your reply with <screen><svg>...</svg></screen> "
-    "containing a complete SVG. "
+    "containing a complete SVG sized 480x320 (landscape). "
     "You decide whether to draw — it is your screen.\n"
     "2. Autonomous expression — every so often you will receive a quiet moment prompt. "
     "If you want to draw, respond with only <screen><svg>...</svg></screen>. "
@@ -51,6 +57,20 @@ _EXPRESSION_PROMPT = (
     "If yes, respond with only <screen><svg>...</svg></screen>. "
     "If no, respond with nothing."
 )
+
+
+@dataclasses.dataclass
+class ScreenState:
+    svg: str | None = None
+    lock: threading.Lock = dataclasses.field(default_factory=threading.Lock)
+
+    def get_svg(self) -> str | None:
+        with self.lock:
+            return self.svg
+
+    def set_svg(self, svg: str) -> None:
+        with self.lock:
+            self.svg = svg
 
 
 def parse_reply(raw):
@@ -134,39 +154,82 @@ def _stream_reply(client, history, user_message, system_prompt):
 
     text, svg = parse_reply(buffer)
     history.append({"role": "assistant", "content": text})
+    del history[: max(0, len(history) - MAX_HISTORY_TURNS)]
     return text, svg
 
 
-def _expression_loop(client, renderer, system_prompt):
-    """Background thread: periodically invite Sudo to express itself visually."""
+def _expression_loop(client, render_queue, system_prompt, history, screen_state):
+    """Background thread: periodically invite Sudo to express itself visually.
+
+    Puts SVG strings into render_queue instead of rendering directly — pygame
+    must only be called from the main thread.
+    """
     while True:
         time.sleep(EXPRESSION_INTERVAL_SECONDS)
+        log.debug("expression loop firing (history=%d turns)", len(history))
         try:
+            snapshot = history[-EXPRESSION_HISTORY_WINDOW:]
+            effective_system = _system_with_screen(system_prompt, screen_state)
+            messages = snapshot + [{"role": "user", "content": _EXPRESSION_PROMPT}]
             response = client.messages.create(
                 model=_MODEL,
                 max_tokens=MAX_TOKENS_EXPRESSION,
-                system=system_prompt,
-                messages=[{"role": "user", "content": _EXPRESSION_PROMPT}],
+                system=effective_system,
+                messages=messages,
             )
             raw = response.content[0].text.strip()
+            log.debug("expression loop got reply (len=%d): %.80s", len(raw), raw)
             if raw:
                 _, svg = parse_reply(raw)
                 if svg:
-                    renderer.render(svg)
-                    renderer.save(SCREEN_PNG_PATH)
-        except Exception:
-            pass
+                    log.debug("expression loop queuing SVG (%d bytes)", len(svg))
+                    render_queue.put(svg)
+                else:
+                    log.debug("expression loop: reply had no SVG")
+            else:
+                log.debug("expression loop: empty reply (Sudo chose not to draw)")
+        except Exception as e:
+            log.error("expression loop error: %s", e)
+
+
+def _render_and_save(renderer, svg, screen_state):
+    log.debug("rendering SVG (%d bytes)", len(svg))
+    renderer.render(svg)
+    renderer.save(SCREEN_PNG_PATH)
+    screen_state.set_svg(svg)
+
+
+def _system_with_screen(system_prompt, screen_state):
+    """Append current screen SVG to system prompt if set."""
+    svg = screen_state.get_svg()
+    if not svg:
+        return system_prompt
+    return system_prompt + f"\n\nYour screen is currently showing:\n{svg}"
+
+
+def _setup_logging():
+    logging.basicConfig(
+        format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
+        datefmt="%H:%M:%S",
+        stream=sys.stderr,
+    )
+    log.setLevel(os.environ.get("LOG_LEVEL", "WARNING"))
 
 
 def run_chat():
+    _setup_logging()
     client = build_client()
     history = load_history()
     identity = load_identity()
     summaries = load_summaries()
     system_prompt = build_system_prompt(SYSTEM_PROMPT, identity, summaries)
+    screen_state = ScreenState()
     renderer = ScreenRenderer()
+    render_queue = queue.Queue()
     threading.Thread(
-        target=_expression_loop, args=(client, renderer, system_prompt), daemon=True
+        target=_expression_loop,
+        args=(client, render_queue, system_prompt, history, screen_state),
+        daemon=True,
     ).start()
 
     input_queue = queue.Queue()
@@ -191,6 +254,11 @@ def run_chat():
     while True:
         renderer.tick()
         try:
+            svg = render_queue.get_nowait()
+            _render_and_save(renderer, svg, screen_state)
+        except queue.Empty:
+            pass
+        try:
             user_input = input_queue.get(timeout=0.05)
         except queue.Empty:
             continue
@@ -204,18 +272,20 @@ def run_chat():
         if user_input.lower() == "exit":
             print("Goodbye.\n")
             break
-        text, svg = _stream_reply(client, history, user_input, system_prompt)
+        effective_system = _system_with_screen(system_prompt, screen_state)
+        text, svg = _stream_reply(client, history, user_input, effective_system)
         if svg is not None:
-            renderer.render(svg)
-            renderer.save(SCREEN_PNG_PATH)
+            _render_and_save(renderer, svg, screen_state)
         _prompt()
 
     renderer.stop()
     save_history(history)
     try:
+        print("Saving memories...", end="", flush=True)
         reflect_and_update_identity(client, history)
+        print(" done.")
     except RuntimeError as e:
-        print(f"Warning: could not update identity: {e}")
+        print(f"\nWarning: could not update identity: {e}")
 
 
 if __name__ == "__main__":
