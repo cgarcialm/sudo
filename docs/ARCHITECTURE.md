@@ -1,85 +1,13 @@
 # Sudo — Architecture
 
-## Phase 1: Foundation
+Sudo is a conversational AI running on a Raspberry Pi. It has a physical screen, persistent memory across sessions, and an autonomous expression loop that runs independently of conversation.
 
-Docker on Mac proves the setup works before the Pi arrives.
+---
 
-```mermaid
-flowchart LR
-    subgraph Mac
-        Docker["Docker Container\nARM64/Linux"]
-        Python["Python\nmain.py"]
-        Docker --> Python
-    end
-
-    Python -->|HTTPS| API["Anthropic API"]
-    API --> Claude
-    Claude -->|response| Python
-```
-
-## Phase 2: Chat
-
-You chat with Sudo from a terminal. Conversation history persists for the session.
+## Components
 
 ```mermaid
 flowchart LR
-    User["Terminal\n(chat.py)"]
-
-    subgraph Pi["Raspberry Pi"]
-        Chat["chat.py\nREPL loop"]
-        History["Conversation History\n(in-memory)"]
-        Chat <--> History
-    end
-
-    User -->|input| Chat
-    Chat -->|HTTPS| API["Anthropic API"]
-    API --> Claude
-    Claude -->|text response| Chat
-    Chat -->|reply| User
-```
-
-## Phase 3: Persistence
-
-Sudo's memory and identity survive across sessions. Both are written to disk and loaded at startup.
-
-```mermaid
-flowchart LR
-    User["Terminal\n(chat.py)"]
-
-    subgraph Pi["Raspberry Pi"]
-        Chat["chat.py"]
-        subgraph Memory["memory/"]
-            History["history.json\n(last N turns)"]
-            Identity["identity.md\n(Sudo's self-concept)"]
-        end
-    end
-
-    Memory -->|load at startup| Chat
-    User -->|input| Chat
-    Chat -->|HTTPS| API["Anthropic API"]
-    API --> Claude
-    Claude -->|reply| Chat
-    Chat -->|reflect + update on exit| Memory
-```
-
-## Phase 4: Screen ✅
-
-Every reply includes a 16×16 pixel grid Sudo paints however it wants. Rendered live via pygame; saved as `memory/screen.png`.
-
-## Phase 4b: SVG Screen + Autonomous Expression ✅
-
-Replaces the pixel grid with SVG. Sudo has two independent output channels: conversation replies (optionally with `<screen><svg>…</svg></screen>`) and an autonomous expression loop that invites Sudo to draw every 15 seconds (default; overridable via `EXPRESSION_INTERVAL_SECONDS`). The pygame window opens immediately at startup in fullscreen at native resolution (480×320 on OSOYOO 3.5" display; windowed 320×320 in dev mode via `SCREEN_FULLSCREEN=false`).
-
-`ScreenState` is a thread-safe dataclass shared between the main thread and expression loop. It holds the last rendered SVG and exposes `get_svg()`/`set_svg()` for lock-safe access. Both threads call `_system_with_screen()` to inject the current SVG into the system prompt before each API call — so Sudo always knows what it's showing. The expression loop also snapshots the last 6 history turns (`EXPRESSION_HISTORY_WINDOW`) to draw with conversation context.
-
-The expression loop puts `(tool, content)` pairs onto an `action_queue` (never calls handlers directly) — pygame must only be called from the main thread. The main thread drains the queue on each tick.
-
-Debug logging is available via `LOG_LEVEL=DEBUG` (enabled automatically by `dev.sh`).
-
-```mermaid
-flowchart LR
-    User["Terminal\n(chat.py)"]
-
     subgraph Pi["Raspberry Pi"]
         subgraph Threads["chat.py"]
             Main["Main thread\n(event loop + chat)"]
@@ -89,149 +17,121 @@ flowchart LR
         AQ["action_queue\n(tool, content)"]
         SS["ScreenState\n(shared SVG + lock)"]
         Screen["ScreenRenderer\n(screen.py)"]
-        PNG["memory/screen.png"]
+        subgraph Memory["memory/"]
+            History["history.json"]
+            Identity["identity.md"]
+            Notes["notes.md"]
+            Summaries["summaries.json"]
+        end
     end
 
     InputT -->|queued line| Main
-    Main -->|history + screen context| API["Anthropic API"]
+    Main -->|messages + system prompt| API["Anthropic API"]
     API --> Claude
-    Claude -->|"text + optional tool tags"| Main
-    Main -->|dispatch tool calls| AQ
+    Claude -->|text + tool tags| Main
+    Main -->|dispatch| AQ
     AQ -->|drained each tick| Main
+    ExprT -->|history snapshot + system prompt| API
+    Claude -->|tool tags| ExprT
+    ExprT -->|dispatch| AQ
+    SS -->|current SVG injected into system prompt| Main
+    SS -->|current SVG injected into system prompt| ExprT
     Main -->|set_svg| SS
-    ExprT -->|history snapshot + screen context| API
-    Claude -->|"optional tool tags"| ExprT
-    ExprT -->|dispatch tool calls| AQ
-    SS -->|get_svg → injected into system prompt| Main
-    SS -->|get_svg → injected into system prompt| ExprT
-    Screen -->|cairosvg + pygame.transform.scale + blit| Window["pygame window\n(480×320 fullscreen)"]
-    Screen --> PNG
-    Main -->|tick 20×/sec| Screen
+    Screen -->|render + blit| Window["pygame window\n(480×320 fullscreen)"]
+    Memory -->|load at startup| Main
+    Main -->|notes written mid-session| Notes
+    Main -->|identity + summaries + history on exit| Memory
 ```
 
-## Phase 5: Memory Redesign ✅
+---
 
-Tiered memory gives Sudo continuity across sessions without blowing token budgets.
+## Communication
+
+Sudo runs on the Pi and talks to Claude over HTTPS. Claude never touches the hardware directly — it sends back text and tool tags that Python executes locally.
+
+**Conversation:**
 
 ```mermaid
 flowchart LR
-    subgraph Pi["Raspberry Pi"]
-        subgraph Memory["memory/"]
-            History["history.json\n(last 20 turns)"]
-            Summaries["summaries.json\n(last 10 session summaries)"]
-            Identity["identity.md\n(Sudo's self-concept)"]
-        end
-        Chat["chat.py"]
-    end
-
-    Memory -->|"[identity] + [summaries] + [recent turns]\ninjected into system prompt"| Chat
-    Chat -->|session end\n(parallel API calls)| Memory
+    User["Terminal"] -->|input| Chat["chat.py\n(REPL loop)"]
+    Chat <-->|history| Mem["Conversation History\n(in-memory)"]
+    Chat -->|HTTPS + messages| API["Anthropic API"]
+    API --> Claude
+    Claude -->|text + tool tags| Chat
+    Chat -->|reply| User
 ```
 
-At session end, two Claude calls run in parallel: one rewrites `identity.md`, one writes a short session summary appended to `summaries.json` (rolling window of 10). History is trimmed to 20 turns on save.
-
-## Phase 5b: SVG Gallery ✅
-
-Every rendered SVG is saved to `memory/gallery/YYYY-MM-DD/HH-MM-SS.svg` when `GALLERY_ENABLED=true`. No architectural change — `_save_to_gallery()` is called from `_render_and_save()` as a side effect.
-
-Exit hang fix: `os._exit(0)` is called in `__main__` after `run_chat()` returns. Daemon threads blocked Python's `sys.stdin` cleanup; `os._exit(0)` bypasses it cleanly.
-
-## Phase 5c: Tool System + Cross-Session Notes ✅
-
-`<screen>` is generalized into a tag-based tool registry. Adding a new output channel means adding one entry to `TOOLS` — no other code changes needed.
-
-`src/prompts.py` centralises all prompts sent to Claude.
-
-`<remember>` is the first new tool. Sudo writes mid-conversation to `memory/notes.md`; notes are loaded at startup and injected into the system prompt between identity and summaries.
+**Expression loop** (runs independently every 15s):
 
 ```mermaid
 flowchart LR
-    subgraph Pi["Raspberry Pi"]
-        subgraph Memory["memory/"]
-            Identity["identity.md"]
-            Notes["notes.md\n(Sudo's cross-session observations)"]
-            Summaries["summaries.json"]
-            History["history.json"]
-        end
-        Chat["chat.py\n(tool registry)"]
-    end
-
-    Memory -->|"[identity] + [notes] + [summaries] + [recent turns]"| Chat
-    Chat -->|"<remember>...</remember> mid-conversation"| Notes
-    Chat -->|session end| Identity
-    Chat -->|session end| Summaries
-    Chat -->|session end| History
+    Timer["15s timer"] --> ExprT["Expression thread"]
+    ExprT -->|history snapshot + system prompt| API["Anthropic API"]
+    API --> Claude
+    Claude -->|tool tags| ExprT
+    ExprT -->|action_queue| Main["Main thread\n(executes tools)"]
 ```
 
-**Tool dispatch flow:** `parse_reply(raw, tool_names)` extracts all tag calls → `_dispatch_tool_calls()` routes each: `main_thread=True` → `action_queue` (drained by main loop), else → inline handler.
+---
 
-## Phase 6: Microphone
+## Threading model
 
-Push-to-talk voice input via `faster-whisper`.
+Three threads run concurrently:
 
-## Phase 7: Vision
+- **Main thread** — drives the event loop: drains `action_queue`, reads from `input_queue`, calls the API, dispatches tool calls, ticks the renderer at 20Hz
+- **Input thread** — blocks on `stdin.readline()` and puts lines onto `input_queue`; decouples blocking input from the event loop
+- **Expression thread** — wakes every `EXPRESSION_INTERVAL_SECONDS` (default 15s), fires an autonomous API call, dispatches any tool calls onto `action_queue`
 
-Camera frames are sent to Claude. Claude can now see.
+`action_queue` is the bridge between background threads and the main thread. Tools marked `main_thread=True` (e.g. screen rendering) are never called directly from the expression thread — they go on the queue and the main thread executes them on the next tick.
 
-```mermaid
-flowchart LR
-    Camera -->|frame| Pi
+---
 
-    subgraph Pi["Raspberry Pi"]
-        Capture["Capture & Compress\nframe"]
-    end
+## Tool system
 
-    Pi -->|HTTPS\ntext + image| API["Anthropic API"]
-    API --> Claude["Claude\n(sees + thinks)"]
-    Claude -->|response| Pi
+Sudo communicates back to the world via tag-based tools embedded in its replies:
+
+```
+<screen><svg>...</svg></screen>   → renders SVG on the physical screen
+<remember>...</remember>          → appends a note to memory/notes.md
 ```
 
-## Phase 8: Body
+Tools are registered in `TOOLS` (a dict of `ToolDef`) in `chat.py`. Adding a new output channel (LEDs, speaker, motors) means adding one entry — no other code changes needed.
 
-The Pi preprocesses sensor data locally and sends one-line summaries to Claude — not raw data — to keep token cost low.
+**Dispatch flow:**
+1. `parse_reply(raw, tool_names)` extracts all tag calls from a reply
+2. `_dispatch_tool_calls(calls, action_queue, tools)` routes each:
+   - `main_thread=True` → put on `action_queue` (executed by main loop)
+   - `main_thread=False` → call handler inline
 
-```mermaid
-flowchart LR
-    subgraph Sensors
-        Mic["Microphone\n(audio classifier)"]
-        Light["BH1750\n(ambient light)"]
-        Temp["DHT22\n(temperature)"]
-        Clock["System clock"]
-    end
+Tool descriptions are generated from the registry and injected into the system prompt automatically, so Sudo always knows what channels are available.
 
-    subgraph Pi["Raspberry Pi"]
-        Summarizer["Local preprocessor\n→ text summary"]
-        Chat["chat.py"]
-    end
+---
 
-    Sensors -->|raw data| Summarizer
-    Summarizer -->|"'It's quiet, midday...'"| Chat
-    Chat -->|HTTPS| API["Anthropic API"]
-```
+## Screen
 
-## Phase 9: Autonomy
+`ScreenState` is a thread-safe dataclass shared between all threads. It holds the last rendered SVG and exposes `get_svg()`/`set_svg()` for lock-safe access.
 
-You give Sudo a goal. Claude navigates using the camera.
+Before every API call, `_system_with_screen()` injects the current SVG into the system prompt so Sudo always knows what it's showing.
 
-```mermaid
-flowchart TB
-    You["You: 'go to the door'"] --> Pi
+`ScreenRenderer` (in `screen.py`) converts SVG to a pygame surface via `cairosvg`, scales it to fill the window, and blits it. The rendered image is also saved to `memory/screen.png`.
 
-    subgraph Pi["Raspberry Pi"]
-        Loop["Capture frame\n→ send to Claude\n→ execute command\n→ repeat"]
-    end
+---
 
-    Camera -->|frame| Loop
-    Loop -->|goal + image| API["Anthropic API"]
-    API --> Claude["Claude\n(decides next move)"]
-    Claude -->|forward / left\nright / stop| Loop
+## Memory
 
-    Loop --> Motors
-    Loop --> LEDs
-    Loop --> Speaker
+See [MEMORY.md](MEMORY.md) for the full memory design.
 
-    Sensor["Ultrasonic Sensor\n(hardware safety)"] -->|obstacle < threshold\ncut motors| Motors
-```
+**Summary:** four files on disk (`history.json`, `identity.md`, `notes.md`, `summaries.json`) injected into the system prompt at startup. Notes are written mid-session via `<remember>`; identity, summaries, and history are written on clean exit.
+
+---
+
+## Deployment
+
+| Script | Purpose |
+|---|---|
+| `pi.sh` | Run directly on Pi — loads `.env`, runs `src/chat.py` |
+| `dev.sh` | Run locally against mock server — no real API calls |
+| `run.sh` | Run via Docker — used by CI and integration tests |
 
 ---
 
