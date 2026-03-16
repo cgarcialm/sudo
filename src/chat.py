@@ -38,9 +38,6 @@ from screen import ScreenRenderer
 
 log = logging.getLogger("sudo")
 
-_MODEL = MODEL
-_MAX_TOKENS = MAX_TOKENS_CHAT
-
 
 @dataclasses.dataclass
 class ToolDef:
@@ -131,8 +128,8 @@ def send_message(client, history, user_message, system_prompt=SYSTEM_PROMPT):
     history.append({"role": "user", "content": user_message})
     try:
         response = client.messages.create(
-            model=_MODEL,
-            max_tokens=_MAX_TOKENS,
+            model=MODEL,
+            max_tokens=MAX_TOKENS_CHAT,
             system=system_prompt,
             messages=history,
         )
@@ -161,8 +158,8 @@ def _stream_reply(client, history, user_message, system_prompt, tools):
     print("\n> Sudo: ", end="", flush=True)
     try:
         with client.messages.stream(
-            model=_MODEL,
-            max_tokens=_MAX_TOKENS,
+            model=MODEL,
+            max_tokens=MAX_TOKENS_CHAT,
             system=system_prompt,
             messages=history,
         ) as stream:
@@ -219,7 +216,7 @@ def _expression_loop(client, action_queue, tools, system_prompt, history, screen
             effective_system = _system_with_screen(system_prompt, screen_state)
             messages = snapshot + [{"role": "user", "content": prompts.EXPRESSION}]
             response = client.messages.create(
-                model=_MODEL,
+                model=MODEL,
                 max_tokens=MAX_TOKENS_EXPRESSION,
                 system=effective_system,
                 messages=messages,

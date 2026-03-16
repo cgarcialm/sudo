@@ -42,12 +42,9 @@ Research: [phase-3-persistence.md](research/phase-3-persistence.md)
 - `identity.md` compressed by Sudo when it grows too large, keeping only what feels significant ✅
 
 ### Phase 4: Screen ✅
-Sudo has a 16×16 pixel screen it can paint however it wants.
+Sudo has a pixel screen it can paint however it wants.
 Research: [phase-4-screen.md](research/phase-4-screen.md)
-- Every reply includes a 16×16 grid of hex colors Sudo chooses to display ✅
-- Sudo decides what to paint — patterns, symbols, abstract art, nothing — it's its own expression ✅
-- pygame window renders the grid (each pixel = one colored square) ✅
-- Screen persists between replies; Sudo repaints as part of every reply ✅
+- pygame window renders a 16×16 pixel grid — superseded by SVG in Phase 4b ✅
 - `run.sh` is the canonical way to run Sudo (user and tests share it) ✅
 
 ### Phase 4b: SVG Screen + Autonomous Expression ✅

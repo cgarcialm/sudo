@@ -114,4 +114,4 @@ def test_expression_loop_fires_without_crashing(mock_anthropic_server):
         stdout, stderr = proc.communicate(timeout=30)
 
     assert proc.returncode == 0
-    assert "[expression loop]" not in stderr
+    assert "expression loop error" not in stderr

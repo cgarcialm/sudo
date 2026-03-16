@@ -200,10 +200,15 @@ def test_build_system_prompt_notes_before_summaries():
 
 def test_reflect_and_update_identity_saves_file(tmp_path):
     mock_client = MagicMock()
-    mock_client.messages.create.side_effect = [
-        MagicMock(content=[MagicMock(text="I am Sudo, a curious robot.")]),  # identity
-        MagicMock(content=[MagicMock(text="We talked about robots.")]),  # summary
-    ]
+
+    # Dispatch by content: parallel futures call create in non-deterministic order.
+    def fake_create(*args, **kwargs):
+        content = kwargs.get("messages", [{}])[-1].get("content", "")
+        if "Rewrite your identity" in content:
+            return MagicMock(content=[MagicMock(text="I am Sudo, a curious robot.")])
+        return MagicMock(content=[MagicMock(text="We talked about robots.")])
+
+    mock_client.messages.create.side_effect = fake_create
     path = tmp_path / "identity.md"
     summaries_path = tmp_path / "summaries.json"
     history = [
