@@ -19,5 +19,6 @@ export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-test-key}"
 export ANTHROPIC_BASE_URL="http://localhost:8765"
 export EXPRESSION_INTERVAL_SECONDS=5
 export SCREEN_FULLSCREEN=false
+export LOG_LEVEL="${LOG_LEVEL:-DEBUG}"
 
 PYTHONPATH=src uv run python src/chat.py

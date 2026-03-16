@@ -1,10 +1,19 @@
 import dataclasses
+import logging
 import os
 import queue
 import re
 import sys
 import threading
 import time
+
+logging.basicConfig(
+    format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
+    datefmt="%H:%M:%S",
+    stream=sys.stderr,
+)
+log = logging.getLogger("sudo")
+log.setLevel(os.environ.get("LOG_LEVEL", "WARNING").upper())
 
 import anthropic
 
@@ -163,6 +172,7 @@ def _expression_loop(client, render_queue, system_prompt, history, screen_state)
     """
     while True:
         time.sleep(EXPRESSION_INTERVAL_SECONDS)
+        log.debug("expression loop firing (history=%d turns)", len(history))
         try:
             snapshot = history[-EXPRESSION_HISTORY_WINDOW:]
             effective_system = _system_with_screen(system_prompt, screen_state)
@@ -174,15 +184,22 @@ def _expression_loop(client, render_queue, system_prompt, history, screen_state)
                 messages=messages,
             )
             raw = response.content[0].text.strip()
+            log.debug("expression loop got reply (len=%d): %.80r", len(raw), raw)
             if raw:
                 _, svg = parse_reply(raw)
                 if svg:
+                    log.debug("expression loop queuing SVG (%d bytes)", len(svg))
                     render_queue.put(svg)
+                else:
+                    log.debug("expression loop: reply had no SVG")
+            else:
+                log.debug("expression loop: empty reply (Sudo chose not to draw)")
         except Exception as e:
             print(f"[expression loop] {e}", file=sys.stderr)
 
 
 def _render_and_save(renderer, svg, screen_state):
+    log.debug("rendering SVG (%d bytes)", len(svg))
     renderer.render(svg)
     renderer.save(SCREEN_PNG_PATH)
     screen_state.set_svg(svg)
