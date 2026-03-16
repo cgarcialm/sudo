@@ -31,7 +31,7 @@ Text-based conversation with Sudo via terminal.
 
 ### Phase 3: Persistence ✅
 Sudo remembers past conversations and genuinely evolves over time.
-- `memory/history.json` — rolling window of last 50 conversation turns, loaded at startup ✅
+- `memory/history.json` — rolling window of last 20 conversation turns, loaded at startup ✅
 - `memory/identity.md` — Sudo's self-concept: personality, opinions, and observations written and updated by Sudo itself ✅
 - At session end, Sudo reflects on the conversation and updates `identity.md` autonomously ✅
 - Both files injected into the system prompt at startup so Sudo picks up where it left off ✅
@@ -54,7 +54,7 @@ Sudo also gets two independent output channels and learns about both through its
 - **Eager display init**: pygame window opens immediately at startup; main thread pumps events via `tick()` while waiting for input ✅
 - **Two output channels**: ✅
   - Conversation reply (text, optionally includes `<screen><svg>...</svg></screen>`)
-  - Autonomous expression loop: background thread wakes every N seconds, asks Sudo "do you want to express something?", renders SVG if yes
+  - Autonomous expression loop: background thread wakes every 15s (default), asks Sudo "do you want to express something?", queues SVG for main thread to render
 - **System prompt update**: tell Sudo what it is (Pi robot), that it has a physical screen (480×320), and that it has both channels available ✅
 - Loops are independent — conversation never blocks expression and vice versa ✅
 - **Screen context awareness**: `ScreenState` dataclass shared between threads; `_system_with_screen()` injects current SVG into system prompt per call so Sudo knows what it's showing ✅

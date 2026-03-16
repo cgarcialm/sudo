@@ -68,9 +68,13 @@ Every reply includes a 16×16 pixel grid Sudo paints however it wants. Rendered 
 
 ## Phase 4b: SVG Screen + Autonomous Expression ✅
 
-Replaces the pixel grid with SVG. Sudo has two independent output channels: conversation replies (optionally with `<screen><svg>…</svg></screen>`) and an autonomous expression loop that invites Sudo to draw every 30 seconds. The pygame window opens immediately at startup in fullscreen at native resolution (480×320 on OSOYOO 3.5" display; windowed 320×320 in dev mode via `SCREEN_FULLSCREEN=false`).
+Replaces the pixel grid with SVG. Sudo has two independent output channels: conversation replies (optionally with `<screen><svg>…</svg></screen>`) and an autonomous expression loop that invites Sudo to draw every 15 seconds (default; overridable via `EXPRESSION_INTERVAL_SECONDS`). The pygame window opens immediately at startup in fullscreen at native resolution (480×320 on OSOYOO 3.5" display; windowed 320×320 in dev mode via `SCREEN_FULLSCREEN=false`).
 
 `ScreenState` is a thread-safe dataclass shared between the main thread and expression loop. It holds the last rendered SVG and exposes `get_svg()`/`set_svg()` for lock-safe access. Both threads call `_system_with_screen()` to inject the current SVG into the system prompt before each API call — so Sudo always knows what it's showing. The expression loop also snapshots the last 6 history turns (`EXPRESSION_HISTORY_WINDOW`) to draw with conversation context.
+
+The expression loop puts SVG strings into a `render_queue` (never renders directly) — pygame must only be called from the main thread. The main thread drains the queue on each tick.
+
+Debug logging is available via `LOG_LEVEL=DEBUG` (enabled automatically by `dev.sh`).
 
 ```mermaid
 flowchart LR
@@ -80,8 +84,9 @@ flowchart LR
         subgraph Threads["chat.py"]
             Main["Main thread\n(event loop + chat)"]
             InputT["Input thread\n(reads stdin)"]
-            ExprT["Expression thread\n(every 30s)"]
+            ExprT["Expression thread\n(every 15s)"]
         end
+        RQ["render_queue"]
         SS["ScreenState\n(shared SVG + lock)"]
         Screen["ScreenRenderer\n(screen.py)"]
         PNG["memory/screen.png"]
@@ -95,8 +100,9 @@ flowchart LR
     Main -->|set_svg| SS
     ExprT -->|history snapshot + screen context| API
     Claude -->|"optional &lt;screen&gt;&lt;svg&gt;"| ExprT
-    ExprT -->|svg string| Screen
-    ExprT -->|set_svg| SS
+    ExprT -->|svg string| RQ
+    RQ -->|drained each tick| Main
+    Main -->|set_svg| SS
     SS -->|get_svg → injected into system prompt| Main
     SS -->|get_svg → injected into system prompt| ExprT
     Screen -->|cairosvg + pygame.transform.scale + blit| Window["pygame window\n(480×320 fullscreen)"]
