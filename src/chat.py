@@ -11,6 +11,7 @@ import anthropic
 from config import (
     EXPRESSION_HISTORY_WINDOW,
     EXPRESSION_INTERVAL_SECONDS,
+    MAX_HISTORY_TURNS,
     MAX_TOKENS_CHAT,
     MAX_TOKENS_EXPRESSION,
     MODEL,
@@ -150,6 +151,7 @@ def _stream_reply(client, history, user_message, system_prompt):
 
     text, svg = parse_reply(buffer)
     history.append({"role": "assistant", "content": text})
+    del history[: max(0, len(history) - MAX_HISTORY_TURNS)]
     return text, svg
 
 
@@ -171,11 +173,15 @@ def _expression_loop(client, renderer, system_prompt, history, screen_state):
             if raw:
                 _, svg = parse_reply(raw)
                 if svg:
-                    renderer.render(svg)
-                    renderer.save(SCREEN_PNG_PATH)
-                    screen_state.set_svg(svg)
-        except Exception:
-            pass
+                    _render_and_save(renderer, svg, screen_state)
+        except Exception as e:
+            print(f"[expression loop] {e}", file=sys.stderr)
+
+
+def _render_and_save(renderer, svg, screen_state):
+    renderer.render(svg)
+    renderer.save(SCREEN_PNG_PATH)
+    screen_state.set_svg(svg)
 
 
 def _system_with_screen(system_prompt, screen_state):
@@ -238,9 +244,7 @@ def run_chat():
         effective_system = _system_with_screen(system_prompt, screen_state)
         text, svg = _stream_reply(client, history, user_input, effective_system)
         if svg is not None:
-            renderer.render(svg)
-            renderer.save(SCREEN_PNG_PATH)
-            screen_state.set_svg(svg)
+            _render_and_save(renderer, svg, screen_state)
         _prompt()
 
     renderer.stop()
