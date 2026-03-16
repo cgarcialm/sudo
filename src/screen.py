@@ -57,7 +57,9 @@ class ScreenRenderer:
                 output_width=w,
                 output_height=h,
             )
-            img = pygame.image.load(io.BytesIO(png_bytes))
+            img = pygame.transform.scale(
+                pygame.image.load(io.BytesIO(png_bytes)), (w, h)
+            )
             self._surface.blit(img, (0, 0))
             pygame.display.flip()
         except Exception:

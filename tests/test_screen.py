@@ -50,6 +50,7 @@ def test_render_converts_svg_and_blits(mock_pygame, mock_cairosvg):
 
     mock_cairosvg.svg2png.assert_called_once()
     mock_pygame.image.load.assert_called_once()
+    mock_pygame.transform.scale.assert_called_once()
     renderer._surface.blit.assert_called_once()
     renderer.stop()
 

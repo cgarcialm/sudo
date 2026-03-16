@@ -15,10 +15,10 @@ import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 _MOCK_SVG = (
-    '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320">'
-    '<rect width="320" height="320" fill="#1a1a2e"/>'
-    '<circle cx="160" cy="160" r="80" fill="#e94560" opacity="0.8"/>'
-    '<circle cx="160" cy="160" r="40" fill="#0f3460"/>'
+    '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320">'
+    '<rect width="480" height="320" fill="#1a1a2e"/>'
+    '<circle cx="240" cy="160" r="80" fill="#e94560" opacity="0.8"/>'
+    '<circle cx="240" cy="160" r="40" fill="#0f3460"/>'
     "</svg>"
 )
 _MOCK_REPLY = f"Hello from mock!\n<screen>{_MOCK_SVG}</screen>"
