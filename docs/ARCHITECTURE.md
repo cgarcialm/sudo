@@ -72,7 +72,7 @@ Replaces the pixel grid with SVG. Sudo has two independent output channels: conv
 
 `ScreenState` is a thread-safe dataclass shared between the main thread and expression loop. It holds the last rendered SVG and exposes `get_svg()`/`set_svg()` for lock-safe access. Both threads call `_system_with_screen()` to inject the current SVG into the system prompt before each API call — so Sudo always knows what it's showing. The expression loop also snapshots the last 6 history turns (`EXPRESSION_HISTORY_WINDOW`) to draw with conversation context.
 
-The expression loop puts SVG strings into a `render_queue` (never renders directly) — pygame must only be called from the main thread. The main thread drains the queue on each tick.
+The expression loop puts `(tool, content)` pairs onto an `action_queue` (never calls handlers directly) — pygame must only be called from the main thread. The main thread drains the queue on each tick.
 
 Debug logging is available via `LOG_LEVEL=DEBUG` (enabled automatically by `dev.sh`).
 
@@ -86,7 +86,7 @@ flowchart LR
             InputT["Input thread\n(reads stdin)"]
             ExprT["Expression thread\n(every 15s)"]
         end
-        RQ["render_queue"]
+        AQ["action_queue\n(tool, content)"]
         SS["ScreenState\n(shared SVG + lock)"]
         Screen["ScreenRenderer\n(screen.py)"]
         PNG["memory/screen.png"]
@@ -95,14 +95,13 @@ flowchart LR
     InputT -->|queued line| Main
     Main -->|history + screen context| API["Anthropic API"]
     API --> Claude
-    Claude -->|"text + optional &lt;screen&gt;&lt;svg&gt;"| Main
-    Main -->|svg string| Screen
+    Claude -->|"text + optional tool tags"| Main
+    Main -->|dispatch tool calls| AQ
+    AQ -->|drained each tick| Main
     Main -->|set_svg| SS
     ExprT -->|history snapshot + screen context| API
-    Claude -->|"optional &lt;screen&gt;&lt;svg&gt;"| ExprT
-    ExprT -->|svg string| RQ
-    RQ -->|drained each tick| Main
-    Main -->|set_svg| SS
+    Claude -->|"optional tool tags"| ExprT
+    ExprT -->|dispatch tool calls| AQ
     SS -->|get_svg → injected into system prompt| Main
     SS -->|get_svg → injected into system prompt| ExprT
     Screen -->|cairosvg + pygame.transform.scale + blit| Window["pygame window\n(480×320 fullscreen)"]
@@ -130,6 +129,35 @@ flowchart LR
 ```
 
 At session end, two Claude calls run in parallel: one rewrites `identity.md`, one writes a short session summary appended to `summaries.json` (rolling window of 10). History is trimmed to 20 turns on save.
+
+## Phase 5c: Tool System + Cross-Session Notes ✅
+
+`<screen>` is generalized into a tag-based tool registry. Adding a new output channel means adding one entry to `TOOLS` — no other code changes needed.
+
+`src/prompts.py` centralises all prompts sent to Claude.
+
+`<remember>` is the first new tool. Sudo writes mid-conversation to `memory/notes.md`; notes are loaded at startup and injected into the system prompt between identity and summaries.
+
+```mermaid
+flowchart LR
+    subgraph Pi["Raspberry Pi"]
+        subgraph Memory["memory/"]
+            Identity["identity.md"]
+            Notes["notes.md\n(Sudo's cross-session observations)"]
+            Summaries["summaries.json"]
+            History["history.json"]
+        end
+        Chat["chat.py\n(tool registry)"]
+    end
+
+    Memory -->|"[identity] + [notes] + [summaries] + [recent turns]"| Chat
+    Chat -->|"<remember>...</remember> mid-conversation"| Notes
+    Chat -->|session end| Identity
+    Chat -->|session end| Summaries
+    Chat -->|session end| History
+```
+
+**Tool dispatch flow:** `parse_reply(raw, tool_names)` extracts all tag calls → `_dispatch_tool_calls()` routes each: `main_thread=True` → `action_queue` (drained by main loop), else → inline handler.
 
 ## Phase 6: Microphone
 

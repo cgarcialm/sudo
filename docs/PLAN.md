@@ -119,7 +119,7 @@ Files:
 - `src/chat.py` — `ToolDef`, `TOOLS`, `_build_tool_descriptions()`, `parse_reply()`, `_dispatch_tool_calls()`, `_make_tools()`, rename `render_queue` → `action_queue`
 - `tests/test_memory.py` — notes load/save/compress, system prompt ordering
 - `tests/test_chat.py` — tool parsing, stream suppression, remember handler
-- `tests/test_docker.py` — assert `notes.md` written after session
+- `tests/test_docker.py` — assert `notes.md` written after session; tool tags stripped
 - `docs/research/phase-5c-tool-system-notes.md` — problem, research, options, decision
 
 ### Phase 6: Microphone
