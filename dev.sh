@@ -14,9 +14,10 @@ if [ -f .env ]; then
   export $(grep -v '^#' .env | xargs)
 fi
 
-# Always use mock server and short expression interval in dev mode
+# Always use mock server, windowed mode, and short expression interval in dev mode
 export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-test-key}"
 export ANTHROPIC_BASE_URL="http://localhost:8765"
 export EXPRESSION_INTERVAL_SECONDS=5
+export SCREEN_FULLSCREEN=false
 
 PYTHONPATH=src uv run python src/chat.py

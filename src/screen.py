@@ -15,6 +15,9 @@ try:
 except ImportError:
     _PYGAME_AVAILABLE = False
 
+from config import SCREEN_FULLSCREEN as _SCREEN_FULLSCREEN
+from config import SCREEN_SIZE as _SCREEN_SIZE
+
 
 class ScreenRenderer:
     """Renders SVG content in a pygame window.
@@ -33,7 +36,9 @@ class ScreenRenderer:
             return
         try:
             pygame.init()
-            self._surface = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+            flags = pygame.FULLSCREEN if _SCREEN_FULLSCREEN else 0
+            size = (0, 0) if _SCREEN_FULLSCREEN else (_SCREEN_SIZE, _SCREEN_SIZE)
+            self._surface = pygame.display.set_mode(size, flags)
             pygame.display.set_caption("Sudo")
             self._surface.fill((0, 0, 0))
             pygame.display.flip()
