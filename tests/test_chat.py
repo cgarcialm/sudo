@@ -11,6 +11,7 @@ from chat import (
     SYSTEM_PROMPT,
     ScreenState,
     _expression_loop,
+    _save_to_gallery,
     _system_with_screen,
     parse_reply,
     send_message,
@@ -282,3 +283,45 @@ def test_run_chat_renders_svg_from_reply(
             run_chat()
 
     mock_renderer.render.assert_called_once_with(svg)
+
+
+def test_save_to_gallery_writes_svg(tmp_path):
+    svg = "<svg><rect/></svg>"
+    with patch("chat.GALLERY_DIR", str(tmp_path / "gallery")):
+        _save_to_gallery(svg)
+    files = list((tmp_path / "gallery").rglob("*.svg"))
+    assert len(files) == 1
+    assert files[0].read_text() == svg
+
+
+def test_save_to_gallery_organizes_by_date(tmp_path):
+    svg = "<svg/>"
+    with patch("chat.GALLERY_DIR", str(tmp_path / "gallery")):
+        _save_to_gallery(svg)
+    date_dirs = list((tmp_path / "gallery").iterdir())
+    assert len(date_dirs) == 1
+    # directory name matches YYYY-MM-DD
+    assert len(date_dirs[0].name) == 10
+    assert date_dirs[0].name[4] == "-"
+
+
+def test_save_to_gallery_not_called_when_disabled(tmp_path):
+    svg = "<svg/>"
+    with patch("chat.GALLERY_ENABLED", False):
+        with patch("chat.GALLERY_DIR", str(tmp_path / "gallery")):
+            from chat import _render_and_save
+
+            mock_renderer = MagicMock()
+            _render_and_save(mock_renderer, svg, ScreenState())
+    assert not (tmp_path / "gallery").exists()
+
+
+def test_save_to_gallery_called_when_enabled(tmp_path):
+    svg = "<svg/>"
+    with patch("chat.GALLERY_ENABLED", True):
+        with patch("chat.GALLERY_DIR", str(tmp_path / "gallery")):
+            from chat import _render_and_save
+
+            mock_renderer = MagicMock()
+            _render_and_save(mock_renderer, svg, ScreenState())
+    assert len(list((tmp_path / "gallery").rglob("*.svg"))) == 1
