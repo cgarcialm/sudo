@@ -19,3 +19,6 @@ SCREEN_FULLSCREEN = os.environ.get("SCREEN_FULLSCREEN", "true").lower() != "fals
 EXPRESSION_INTERVAL_SECONDS = int(os.environ.get("EXPRESSION_INTERVAL_SECONDS", 15))
 MAX_TOKENS_EXPRESSION = 512
 EXPRESSION_HISTORY_WINDOW = 6
+
+GALLERY_ENABLED = os.environ.get("GALLERY_ENABLED", "false").lower() == "true"
+GALLERY_DIR = "memory/gallery"

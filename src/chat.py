@@ -1,17 +1,21 @@
 import dataclasses
 import logging
 import os
+import pathlib
 import queue
 import re
 import sys
 import threading
 import time
+from datetime import datetime
 
 import anthropic
 
 from config import (
     EXPRESSION_HISTORY_WINDOW,
     EXPRESSION_INTERVAL_SECONDS,
+    GALLERY_DIR,
+    GALLERY_ENABLED,
     MAX_HISTORY_TURNS,
     MAX_TOKENS_CHAT,
     MAX_TOKENS_EXPRESSION,
@@ -192,11 +196,21 @@ def _expression_loop(client, render_queue, system_prompt, history, screen_state)
             log.error("expression loop error: %s", e)
 
 
+def _save_to_gallery(svg):
+    now = datetime.now()
+    path = pathlib.Path(GALLERY_DIR) / now.strftime("%Y-%m-%d/%H-%M-%S.svg")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(svg)
+    log.debug("gallery saved %s", path)
+
+
 def _render_and_save(renderer, svg, screen_state):
     log.debug("rendering SVG (%d bytes)", len(svg))
     renderer.render(svg)
     renderer.save(SCREEN_PNG_PATH)
     screen_state.set_svg(svg)
+    if GALLERY_ENABLED:
+        _save_to_gallery(svg)
 
 
 def _system_with_screen(system_prompt, screen_state):
@@ -290,3 +304,6 @@ def run_chat():
 
 if __name__ == "__main__":
     run_chat()
+    # Force exit: daemon threads (input reader, expression loop) can block
+    # Python's cleanup of sys.stdin, causing a hang after "done.".
+    os._exit(0)

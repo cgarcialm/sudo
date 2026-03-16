@@ -78,6 +78,12 @@ Files:
 - `src/memory.py` — `load_summaries()`, `save_summary()`, updated `build_system_prompt()`, summary generation in `reflect_and_update_identity()` (runs in parallel with identity reflection)
 - `tests/test_memory.py` — summaries load/save/trim, system prompt injection
 
+### Phase 5b: Gallery + Exit Fix ✅
+- **SVG gallery**: opt-in via `GALLERY_ENABLED=true`; saves every rendered SVG to `memory/gallery/YYYY-MM-DD/HH-MM-SS.svg`. No rolling cap — collect manually.
+- **Exit hang fix**: `os._exit(0)` in `__main__` after `run_chat()` returns. Daemon threads (input reader, expression loop) blocked Python's `sys.stdin` cleanup, causing the process to hang after "Saving memories... done."
+- `src/config.py` — `GALLERY_ENABLED`, `GALLERY_DIR`
+- `src/chat.py` — `_save_to_gallery()`, `_render_and_save()` calls it when enabled
+
 ### Phase 6: Microphone
 Push-to-talk voice input. Press Enter to start recording, Enter again to stop; transcription sent as user message.
 
