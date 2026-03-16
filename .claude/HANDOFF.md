@@ -29,15 +29,20 @@
 - `docs/CODING_STANDARDS.md` — Research Docs section added (format, naming, process)
 - `docs/PLAN.md` — research links on every phase entry
 
+### Pi deployment script
+- `pi.sh` — runs Sudo directly on Pi (no Docker); loads `.env` via `set -a`/`source`/`set +a`
+- `.env.example` — updated with all configurable vars: `DISPLAY`, `SCREEN_FULLSCREEN`, `EXPRESSION_INTERVAL_SECONDS`, `GALLERY_ENABLED`, `LOG_LEVEL`
+- `dev.sh` — `.env` loading aligned to use same `set -a`/`source`/`set +a` pattern
+
 ### Tests
-- 71 unit tests passing
+- 75 unit tests passing
 - 5 Docker integration tests passing
 - `notes.md` existence asserted in `test_memory_written_after_session`
 - `<remember>` tag stripped from output asserted in `test_screen_tag_stripped_from_output`
 
 ## Current state
 - PR #10 open, branch `feat/tool-system-notes`
-- All tests passing (71 unit + 5 Docker)
+- All tests passing (75 unit + 5 Docker)
 
 ## Next steps (Phase 6: Microphone)
 1. Create `src/audio.py` — `AudioCapture` class using `pyaudio`; `transcribe(audio_path) -> str` using `faster-whisper`
