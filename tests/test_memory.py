@@ -6,7 +6,8 @@ import pytest
 
 from memory import (
     IDENTITY_MAX_CHARS,
-    _compress_notes,
+    _compress_text,
+    append_note,
     build_system_prompt,
     load_history,
     load_identity,
@@ -113,22 +114,50 @@ def test_save_notes_creates_file(tmp_path):
     assert path.read_text() == "A curious thought."
 
 
-def test_compress_notes_returns_condensed():
+def test_compress_text_returns_condensed():
     mock_client = MagicMock()
     mock_client.messages.create.return_value = MagicMock(
-        content=[MagicMock(text="condensed notes")]
+        content=[MagicMock(text="condensed")]
     )
-    result = _compress_notes(mock_client, "very long notes text")
-    assert result == "condensed notes"
+    result = _compress_text(mock_client, "long text", "shrink this", 512, "test")
+    assert result == "condensed"
 
 
-def test_compress_notes_raises_on_api_error():
+def test_compress_text_raises_on_api_error():
     mock_client = MagicMock()
     mock_client.messages.create.side_effect = anthropic.APIError(
         message="error", request=MagicMock(), body=None
     )
     with pytest.raises(RuntimeError, match="Claude API error during notes compression"):
-        _compress_notes(mock_client, "some notes")
+        _compress_text(mock_client, "text", "prompt", 512, "notes compression")
+
+
+def test_append_note_creates_notes_file(tmp_path):
+    path = str(tmp_path / "notes.md")
+    mock_client = MagicMock()
+    append_note(mock_client, "A new observation.", path=path)
+    assert (tmp_path / "notes.md").read_text() == "A new observation."
+
+
+def test_append_note_appends_to_existing(tmp_path):
+    path = str(tmp_path / "notes.md")
+    (tmp_path / "notes.md").write_text("First note.")
+    mock_client = MagicMock()
+    append_note(mock_client, "Second note.", path=path)
+    content = (tmp_path / "notes.md").read_text()
+    assert "First note." in content
+    assert "Second note." in content
+
+
+def test_append_note_compresses_when_too_long(tmp_path):
+    path = str(tmp_path / "notes.md")
+    (tmp_path / "notes.md").write_text("x" * 4001)
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="compressed")]
+    )
+    append_note(mock_client, "new note", path=path, max_chars=4000)
+    assert (tmp_path / "notes.md").read_text() == "compressed"
 
 
 def test_build_system_prompt_base_only():

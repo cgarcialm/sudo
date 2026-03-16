@@ -21,11 +21,10 @@ from config import (
     MAX_TOKENS_CHAT,
     MAX_TOKENS_EXPRESSION,
     MODEL,
-    NOTES_MAX_CHARS,
     SCREEN_PNG_PATH,
 )
 from memory import (
-    _compress_notes,
+    append_note,
     build_system_prompt,
     load_history,
     load_identity,
@@ -33,7 +32,6 @@ from memory import (
     load_summaries,
     reflect_and_update_identity,
     save_history,
-    save_notes,
 )
 import prompts
 from screen import ScreenRenderer
@@ -282,11 +280,7 @@ def _make_tools(renderer, screen_state, client):
         _render_and_save(renderer, content, screen_state)
 
     def _handle_remember(content: str) -> None:
-        existing = load_notes() or ""
-        merged = existing + ("\n\n" if existing else "") + content
-        if len(merged) > NOTES_MAX_CHARS:
-            merged = _compress_notes(client, merged)
-        save_notes(merged)
+        append_note(client, content)
 
     return {
         "screen": dataclasses.replace(TOOLS["screen"], handler=_handle_screen),

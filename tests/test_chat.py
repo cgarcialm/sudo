@@ -245,52 +245,16 @@ def test_dispatch_tool_calls_skips_none_content():
 # ---------------------------------------------------------------------------
 
 
-def test_handle_remember_writes_notes():
+def test_handle_remember_calls_append_note():
     mock_client = MagicMock()
     renderer = MagicMock()
     screen_state = ScreenState()
 
-    with patch("chat.load_notes", return_value=None), patch(
-        "chat.save_notes"
-    ) as mock_save:
+    with patch("chat.append_note") as mock_append:
         tools = _make_tools(renderer, screen_state, mock_client)
         tools["remember"].handler("An interesting observation.")
 
-    mock_save.assert_called_once_with("An interesting observation.")
-
-
-def test_handle_remember_appends_to_existing_notes():
-    mock_client = MagicMock()
-    renderer = MagicMock()
-    screen_state = ScreenState()
-
-    with patch("chat.load_notes", return_value="First note."), patch(
-        "chat.save_notes"
-    ) as mock_save:
-        tools = _make_tools(renderer, screen_state, mock_client)
-        tools["remember"].handler("Second note.")
-
-    saved_text = mock_save.call_args[0][0]
-    assert "First note." in saved_text
-    assert "Second note." in saved_text
-
-
-def test_handle_remember_compresses_when_too_long():
-    mock_client = MagicMock()
-    mock_client.messages.create.return_value = MagicMock(
-        content=[MagicMock(text="compressed")]
-    )
-    renderer = MagicMock()
-    screen_state = ScreenState()
-    long_existing = "x" * 4001
-
-    with patch("chat.load_notes", return_value=long_existing), patch(
-        "chat.save_notes"
-    ) as mock_save:
-        tools = _make_tools(renderer, screen_state, mock_client)
-        tools["remember"].handler("new note")
-
-    mock_save.assert_called_once_with("compressed")
+    mock_append.assert_called_once_with(mock_client, "An interesting observation.")
 
 
 # ---------------------------------------------------------------------------
