@@ -24,4 +24,4 @@ if [ -z "$ANTHROPIC_API_KEY" ]; then
     exit 1
 fi
 
-PYTHONPATH=src python src/main.py
+PYTHONPATH=src python src/chat.py
