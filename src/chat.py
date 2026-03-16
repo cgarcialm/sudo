@@ -155,8 +155,12 @@ def _stream_reply(client, history, user_message, system_prompt):
     return text, svg
 
 
-def _expression_loop(client, renderer, system_prompt, history, screen_state):
-    """Background thread: periodically invite Sudo to express itself visually."""
+def _expression_loop(client, render_queue, system_prompt, history, screen_state):
+    """Background thread: periodically invite Sudo to express itself visually.
+
+    Puts SVG strings into render_queue instead of rendering directly — pygame
+    must only be called from the main thread.
+    """
     while True:
         time.sleep(EXPRESSION_INTERVAL_SECONDS)
         try:
@@ -173,7 +177,7 @@ def _expression_loop(client, renderer, system_prompt, history, screen_state):
             if raw:
                 _, svg = parse_reply(raw)
                 if svg:
-                    _render_and_save(renderer, svg, screen_state)
+                    render_queue.put(svg)
         except Exception as e:
             print(f"[expression loop] {e}", file=sys.stderr)
 
@@ -200,9 +204,10 @@ def run_chat():
     system_prompt = build_system_prompt(SYSTEM_PROMPT, identity, summaries)
     screen_state = ScreenState()
     renderer = ScreenRenderer()
+    render_queue = queue.Queue()
     threading.Thread(
         target=_expression_loop,
-        args=(client, renderer, system_prompt, history, screen_state),
+        args=(client, render_queue, system_prompt, history, screen_state),
         daemon=True,
     ).start()
 
@@ -227,6 +232,11 @@ def run_chat():
 
     while True:
         renderer.tick()
+        try:
+            svg = render_queue.get_nowait()
+            _render_and_save(renderer, svg, screen_state)
+        except queue.Empty:
+            pass
         try:
             user_input = input_queue.get(timeout=0.05)
         except queue.Empty:

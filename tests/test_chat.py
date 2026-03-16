@@ -2,6 +2,8 @@ import io
 import os
 from unittest.mock import MagicMock, patch
 
+import queue
+
 import anthropic
 import pytest
 
@@ -161,31 +163,31 @@ class _Stop(BaseException):
 
 
 @patch("chat.time.sleep", side_effect=[None, _Stop()])
-def test_expression_loop_renders_svg_when_returned(mock_sleep):
+def test_expression_loop_queues_svg_when_returned(mock_sleep):
     svg = "<svg><rect width='10' height='10'/></svg>"
     mock_client = MagicMock()
     mock_client.messages.create.return_value = MagicMock(
         content=[MagicMock(text=f"<screen>{svg}</screen>")]
     )
-    mock_renderer = MagicMock()
+    render_queue = queue.Queue()
 
     with pytest.raises(_Stop):
-        _expression_loop(mock_client, mock_renderer, "system", [], ScreenState())
+        _expression_loop(mock_client, render_queue, "system", [], ScreenState())
 
-    mock_renderer.render.assert_called_once_with(svg)
-    mock_renderer.save.assert_called_once()
+    assert not render_queue.empty()
+    assert render_queue.get_nowait() == svg
 
 
 @patch("chat.time.sleep", side_effect=[None, _Stop()])
-def test_expression_loop_skips_render_when_no_svg(mock_sleep):
+def test_expression_loop_skips_queue_when_no_svg(mock_sleep):
     mock_client = MagicMock()
     mock_client.messages.create.return_value = MagicMock(content=[MagicMock(text="")])
-    mock_renderer = MagicMock()
+    render_queue = queue.Queue()
 
     with pytest.raises(_Stop):
-        _expression_loop(mock_client, mock_renderer, "system", [], ScreenState())
+        _expression_loop(mock_client, render_queue, "system", [], ScreenState())
 
-    mock_renderer.render.assert_not_called()
+    assert render_queue.empty()
 
 
 @patch("chat.time.sleep", side_effect=[None, _Stop()])
@@ -198,7 +200,7 @@ def test_expression_loop_includes_history_snapshot(mock_sleep):
     ]
 
     with pytest.raises(_Stop):
-        _expression_loop(mock_client, MagicMock(), "system", history, ScreenState())
+        _expression_loop(mock_client, queue.Queue(), "system", history, ScreenState())
 
     messages_sent = mock_client.messages.create.call_args.kwargs["messages"]
     assert messages_sent[0] == {"role": "user", "content": "hi"}
@@ -212,7 +214,7 @@ def test_expression_loop_includes_screen_in_system_prompt(mock_sleep):
     screen_state = ScreenState(svg=svg)
 
     with pytest.raises(_Stop):
-        _expression_loop(mock_client, MagicMock(), "base", [], screen_state)
+        _expression_loop(mock_client, queue.Queue(), "base", [], screen_state)
 
     system_sent = mock_client.messages.create.call_args.kwargs["system"]
     assert svg in system_sent
