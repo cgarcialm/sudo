@@ -18,6 +18,7 @@ Sudo is a Raspberry Pi 4 AI robot powered by Claude.
 
 ### Phase 1: Foundation ✅
 ARM64 Docker environment working on Mac, ready to deploy to Pi when it arrives.
+Research: [phase-1-foundation.md](research/phase-1-foundation.md)
 - ARM64 Docker environment (mirrors Pi architecture) ✅
 - Python + Anthropic SDK ✅
 - Basic API call works from inside Docker ✅
@@ -25,12 +26,14 @@ ARM64 Docker environment working on Mac, ready to deploy to Pi when it arrives.
 
 ### Phase 2: Chat ✅
 Text-based conversation with Sudo via terminal.
+Research: [phase-2-chat.md](research/phase-2-chat.md)
 - Terminal REPL (`chat.py`) ✅
 - Conversation history maintained for the session ✅
 - System prompt sets Sudo's personality ✅
 
 ### Phase 3: Persistence ✅
 Sudo remembers past conversations and genuinely evolves over time.
+Research: [phase-3-persistence.md](research/phase-3-persistence.md)
 - `memory/history.json` — rolling window of last 20 conversation turns, loaded at startup ✅
 - `memory/identity.md` — Sudo's self-concept: personality, opinions, and observations written and updated by Sudo itself ✅
 - At session end, Sudo reflects on the conversation and updates `identity.md` autonomously ✅
@@ -40,6 +43,7 @@ Sudo remembers past conversations and genuinely evolves over time.
 
 ### Phase 4: Screen ✅
 Sudo has a 16×16 pixel screen it can paint however it wants.
+Research: [phase-4-screen.md](research/phase-4-screen.md)
 - Every reply includes a 16×16 grid of hex colors Sudo chooses to display ✅
 - Sudo decides what to paint — patterns, symbols, abstract art, nothing — it's its own expression ✅
 - pygame window renders the grid (each pixel = one colored square) ✅
@@ -47,6 +51,7 @@ Sudo has a 16×16 pixel screen it can paint however it wants.
 - `run.sh` is the canonical way to run Sudo (user and tests share it) ✅
 
 ### Phase 4b: SVG Screen + Autonomous Expression ✅
+Research: [phase-4b-svg-expression.md](research/phase-4b-svg-expression.md)
 Replace the 16×16 pixel grid with SVG — fewer tokens, more expressive, scales to any resolution.
 Sudo also gets two independent output channels and learns about both through its system prompt.
 
@@ -63,6 +68,7 @@ Sudo also gets two independent output channels and learns about both through its
 
 ### Phase 5: Memory Redesign ✅
 Fix three problems: fresh deploys start blank, history window is too large, no continuity between sessions.
+Research: [phase-5-memory-redesign.md](research/phase-5-memory-redesign.md)
 
 **Tiered memory:**
 - Tier 1 — Recent turns (in-context): last 20 turns from `history.json`
@@ -78,11 +84,43 @@ Files:
 - `src/memory.py` — `load_summaries()`, `save_summary()`, updated `build_system_prompt()`, summary generation in `reflect_and_update_identity()` (runs in parallel with identity reflection)
 - `tests/test_memory.py` — summaries load/save/trim, system prompt injection
 
-### Phase 5b: Gallery + Exit Fix ✅
-- **SVG gallery**: opt-in via `GALLERY_ENABLED=true`; saves every rendered SVG to `memory/gallery/YYYY-MM-DD/HH-MM-SS.svg`. No rolling cap — collect manually.
-- **Exit hang fix**: `os._exit(0)` in `__main__` after `run_chat()` returns. Daemon threads (input reader, expression loop) blocked Python's `sys.stdin` cleanup, causing the process to hang after "Saving memories... done."
-- `src/config.py` — `GALLERY_ENABLED`, `GALLERY_DIR`
-- `src/chat.py` — `_save_to_gallery()`, `_render_and_save()` calls it when enabled
+### Phase 5b: SVG Gallery ✅
+Research: [phase-5b-gallery-exit.md](research/phase-5b-gallery-exit.md)
+Save every rendered SVG to `memory/gallery/YYYY-MM-DD/HH-MM-SS.svg` for later review.
+- `GALLERY_ENABLED=true` env var enables saves (off by default) ✅
+- `_save_to_gallery(svg)` called from `_render_and_save()` when enabled ✅
+- Fix exit hang: `os._exit(0)` after `run_chat()` in `__main__` ✅
+
+### Phase 5c: Tool System + Cross-Session Notes ✅
+Research: [phase-5c-tool-system-notes.md](research/phase-5c-tool-system-notes.md)
+Generalize `<screen>` into a tag-based tool registry. Add `<remember>` as the first new tool.
+
+**Tool registry (`ToolDef`):**
+- Each tool declares: name, description, handler, `main_thread`, `returns_result`
+- `TOOLS` dict at module level drives system prompt generation and parse/dispatch
+- `_build_tool_descriptions(tools)` generates the output-channels block in the system prompt automatically
+- Adding a new output channel (LED, speaker, motor) = one dict entry, zero other changes
+
+**Generalized parsing and stream suppression:**
+- `parse_reply(raw, tool_names) -> (text, dict)` replaces the screen-specific version
+- Stream suppression finds the earliest opener of any registered tag (not just `<screen>`)
+- `_dispatch_tool_calls(calls, action_queue, tools)`: main-thread tools → queue, others → inline
+- `action_queue` of `(ToolDef, content)` replaces the SVG-specific `render_queue`
+
+**`<remember>` tool:**
+- Sudo writes to `memory/notes.md` mid-conversation when something is worth keeping
+- Notes loaded at startup, injected into system prompt between identity and summaries
+- Compressed by Claude (same pattern as identity) when notes exceed `NOTES_MAX_CHARS=4000`
+
+Files:
+- `src/prompts.py` — all Claude prompts centralised (`REFLECT`, `COMPRESS_IDENTITY`, `SUMMARIZE`, `COMPRESS_NOTES`, `BASE`, `EXPRESSION`)
+- `src/config.py` — `NOTES_PATH`, `NOTES_MAX_CHARS`, `MAX_TOKENS_NOTES`
+- `src/memory.py` — `load_notes()`, `save_notes()`, `append_note()`, `_compress_text()`, updated `build_system_prompt()`
+- `src/chat.py` — `ToolDef`, `TOOLS`, `_build_tool_descriptions()`, `parse_reply()`, `_dispatch_tool_calls()`, `_make_tools()`, rename `render_queue` → `action_queue`
+- `tests/test_memory.py` — notes load/save/compress, system prompt ordering
+- `tests/test_chat.py` — tool parsing, stream suppression, remember handler
+- `tests/test_docker.py` — assert `notes.md` written after session
+- `docs/research/phase-5c-tool-system-notes.md` — problem, research, options, decision
 
 ### Phase 6: Microphone
 Push-to-talk voice input. Press Enter to start recording, Enter again to stop; transcription sent as user message.
