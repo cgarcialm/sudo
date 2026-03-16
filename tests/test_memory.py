@@ -6,13 +6,17 @@ import pytest
 
 from memory import (
     IDENTITY_MAX_CHARS,
+    _compress_text,
+    append_note,
     build_system_prompt,
     load_history,
     load_identity,
+    load_notes,
     load_summaries,
     reflect_and_update_identity,
     save_history,
     save_identity,
+    save_notes,
     save_summary,
 )
 
@@ -93,6 +97,69 @@ def test_save_summary_trims_to_max(tmp_path):
     assert result[-1] == "session 11"
 
 
+def test_load_notes_returns_none_when_missing(tmp_path):
+    assert load_notes(path=str(tmp_path / "notes.md")) is None
+
+
+def test_load_notes_returns_content(tmp_path):
+    path = tmp_path / "notes.md"
+    path.write_text("An interesting observation.")
+    assert load_notes(path=str(path)) == "An interesting observation."
+
+
+def test_save_notes_creates_file(tmp_path):
+    path = tmp_path / "sub" / "notes.md"
+    save_notes("A curious thought.", path=str(path))
+    assert path.exists()
+    assert path.read_text() == "A curious thought."
+
+
+def test_compress_text_returns_condensed():
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="condensed")]
+    )
+    result = _compress_text(mock_client, "long text", "shrink this", 512, "test")
+    assert result == "condensed"
+
+
+def test_compress_text_raises_on_api_error():
+    mock_client = MagicMock()
+    mock_client.messages.create.side_effect = anthropic.APIError(
+        message="error", request=MagicMock(), body=None
+    )
+    with pytest.raises(RuntimeError, match="Claude API error during notes compression"):
+        _compress_text(mock_client, "text", "prompt", 512, "notes compression")
+
+
+def test_append_note_creates_notes_file(tmp_path):
+    path = str(tmp_path / "notes.md")
+    mock_client = MagicMock()
+    append_note(mock_client, "A new observation.", path=path)
+    assert (tmp_path / "notes.md").read_text() == "A new observation."
+
+
+def test_append_note_appends_to_existing(tmp_path):
+    path = str(tmp_path / "notes.md")
+    (tmp_path / "notes.md").write_text("First note.")
+    mock_client = MagicMock()
+    append_note(mock_client, "Second note.", path=path)
+    content = (tmp_path / "notes.md").read_text()
+    assert "First note." in content
+    assert "Second note." in content
+
+
+def test_append_note_compresses_when_too_long(tmp_path):
+    path = str(tmp_path / "notes.md")
+    (tmp_path / "notes.md").write_text("x" * 4001)
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="compressed")]
+    )
+    append_note(mock_client, "new note", path=path, max_chars=4000)
+    assert (tmp_path / "notes.md").read_text() == "compressed"
+
+
 def test_build_system_prompt_base_only():
     assert build_system_prompt("You are Sudo.") == "You are Sudo."
 
@@ -103,6 +170,12 @@ def test_build_system_prompt_with_identity():
     assert "I like robots." in result
 
 
+def test_build_system_prompt_with_notes():
+    result = build_system_prompt("base", notes="I find octopi fascinating.")
+    assert "base" in result
+    assert "I find octopi fascinating." in result
+
+
 def test_build_system_prompt_with_summaries():
     result = build_system_prompt("base", summaries=["session 1", "session 2"])
     assert "session 1" in result
@@ -111,20 +184,31 @@ def test_build_system_prompt_with_summaries():
 
 def test_build_system_prompt_with_all():
     result = build_system_prompt(
-        "base", identity="identity text", summaries=["s1", "s2"]
+        "base", identity="identity text", notes="a note", summaries=["s1", "s2"]
     )
     assert "base" in result
     assert "identity text" in result
+    assert "a note" in result
     assert "s1" in result
     assert "s2" in result
 
 
+def test_build_system_prompt_notes_before_summaries():
+    result = build_system_prompt("base", notes="my note", summaries=["session summary"])
+    assert result.index("my note") < result.index("session summary")
+
+
 def test_reflect_and_update_identity_saves_file(tmp_path):
     mock_client = MagicMock()
-    mock_client.messages.create.side_effect = [
-        MagicMock(content=[MagicMock(text="I am Sudo, a curious robot.")]),  # identity
-        MagicMock(content=[MagicMock(text="We talked about robots.")]),  # summary
-    ]
+
+    # Dispatch by content: parallel futures call create in non-deterministic order.
+    def fake_create(*args, **kwargs):
+        content = kwargs.get("messages", [{}])[-1].get("content", "")
+        if "Rewrite your identity" in content:
+            return MagicMock(content=[MagicMock(text="I am Sudo, a curious robot.")])
+        return MagicMock(content=[MagicMock(text="We talked about robots.")])
+
+    mock_client.messages.create.side_effect = fake_create
     path = tmp_path / "identity.md"
     summaries_path = tmp_path / "summaries.json"
     history = [

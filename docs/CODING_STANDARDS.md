@@ -48,6 +48,25 @@
 - No docstrings required for simple functions
 - Add a docstring when a function has non-obvious parameters or side effects
 
+## Research Docs
+
+Every phase that involves a non-trivial design decision must have a research doc in
+`docs/research/` before implementation begins.
+
+**Format** — four sections:
+1. **Problem** — what gap or pain are we solving?
+2. **Research** — relevant context, constraints, prior art in the codebase
+3. **Options** — concrete alternatives considered (at least two)
+4. **Decision** — which option was chosen and why
+
+**Naming:** `phase-N-short-description.md` (e.g. `phase-5c-tool-system-notes.md`)
+
+**When to write one:** any time a phase introduces a new abstraction, changes an existing
+architecture, or has a non-obvious implementation tradeoff. Simple bug fixes and minor
+config additions don't need one.
+
+**Process:** research doc → update `PLAN.md` → update `HANDOFF.md` → then write code.
+
 ## Tests
 - All tests in `tests/`
 - Mock all external calls (Claude API, hardware) — no real API calls in tests

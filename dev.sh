@@ -11,7 +11,9 @@ set -e
 
 # Load .env if present
 if [ -f .env ]; then
-  export $(grep -v '^#' .env | xargs)
+    set -a
+    source .env
+    set +a
 fi
 
 # Always use mock server, windowed mode, and short expression interval in dev mode

@@ -65,17 +65,18 @@ def test_chat_multi_turn(mock_anthropic_server):
 
 
 def test_screen_tag_stripped_from_output(mock_anthropic_server):
-    """<screen> blocks are parsed internally and never shown in the terminal."""
+    """Tool tags are parsed internally and never shown in the terminal."""
     with tempfile.TemporaryDirectory(dir="/tmp") as tmp_dir:
         result = _run_sudo([], stdin="hello\nexit\n", memory_dir=tmp_dir)
 
     assert result.returncode == 0
     assert "<screen>" not in result.stdout
+    assert "<remember>" not in result.stdout
     assert "Sudo:" in result.stdout
 
 
 def test_memory_written_after_session(mock_anthropic_server):
-    """All three memory files are written to the mounted volume after a session."""
+    """All memory files are written to the mounted volume after a session."""
     with tempfile.TemporaryDirectory(dir="/tmp") as tmp_dir:
         result = _run_sudo([], stdin="hello\nexit\n", memory_dir=tmp_dir)
 
@@ -83,6 +84,7 @@ def test_memory_written_after_session(mock_anthropic_server):
         assert pathlib.Path(tmp_dir, "history.json").exists()
         assert pathlib.Path(tmp_dir, "identity.md").exists()
         assert pathlib.Path(tmp_dir, "summaries.json").exists()
+        assert pathlib.Path(tmp_dir, "notes.md").exists()
 
 
 def test_expression_loop_fires_without_crashing(mock_anthropic_server):
@@ -112,4 +114,4 @@ def test_expression_loop_fires_without_crashing(mock_anthropic_server):
         stdout, stderr = proc.communicate(timeout=30)
 
     assert proc.returncode == 0
-    assert "[expression loop]" not in stderr
+    assert "expression loop error" not in stderr
