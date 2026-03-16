@@ -250,9 +250,11 @@ def run_chat():
     renderer.stop()
     save_history(history)
     try:
+        print("Saving memories...", end="", flush=True)
         reflect_and_update_identity(client, history)
+        print(" done.")
     except RuntimeError as e:
-        print(f"Warning: could not update identity: {e}")
+        print(f"\nWarning: could not update identity: {e}")
 
 
 if __name__ == "__main__":

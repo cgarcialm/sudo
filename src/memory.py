@@ -1,6 +1,6 @@
 import json
 import pathlib
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 import anthropic
 
@@ -124,8 +124,8 @@ def reflect_and_update_identity(
         with ThreadPoolExecutor(max_workers=2) as pool:
             reflect_future = pool.submit(_reflect)
             summarize_future = pool.submit(_summarize)
-            reflect_response = reflect_future.result()
-            summarize_response = summarize_future.result()
+            reflect_response = reflect_future.result(timeout=60)
+            summarize_response = summarize_future.result(timeout=60)
 
         new_identity = reflect_response.content[0].text
         if len(new_identity) > IDENTITY_MAX_CHARS:
@@ -133,6 +133,8 @@ def reflect_and_update_identity(
         save_identity(new_identity, path)
         save_summary(summarize_response.content[0].text, path=summaries_path)
         return new_identity
+    except FutureTimeoutError as e:
+        raise RuntimeError("Reflection timed out after 60s") from e
     except anthropic.APIError as e:
         raise RuntimeError(f"Claude API error during reflection: {e}") from e
 
