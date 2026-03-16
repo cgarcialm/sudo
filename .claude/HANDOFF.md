@@ -1,44 +1,39 @@
-# Handoff — Phase 5: Memory Redesign (complete)
+# Handoff — Screen fixes + context awareness (complete)
 
-## Goal
-Add tiered memory so Sudo has continuity across sessions, reduce history window, and redesign the phase order.
+## What was implemented (PR #8, branch `fix/fullscreen-screen`)
 
-## What was implemented
+### Fullscreen display
+- `pygame.FULLSCREEN` flag at native resolution (480×320 OSOYOO 3.5" display)
+- `pygame.transform.scale` after cairosvg render so image fills the screen regardless of SVG aspect ratio
+- System prompt tells Claude to author SVGs at 480×320 (landscape)
+- `SCREEN_FULLSCREEN=false` env var for windowed dev mode (set automatically by `dev.sh`)
 
-**Tiered memory system:**
-- `memory/history.json` — last 20 turns (down from 50). Trimmed on save.
-- `memory/summaries.json` — session summaries, one short paragraph per session written by Sudo at session end. Rolling window of 10. Loaded and injected into the system prompt.
-- `memory/identity.md` — unchanged. Starts blank on fresh deploy; Sudo builds it after first session.
+### Screen context awareness
+- `ScreenState` dataclass in `chat.py` shared between main thread and expression loop
+  - `get_svg()` / `set_svg()` — thread-safe via internal lock
+- `_system_with_screen(system_prompt, screen_state)` — appends current SVG to system prompt so Sudo always knows what it's showing
+- Expression loop snapshots `history[-EXPRESSION_HISTORY_WINDOW:]` (last 6 history turns) before each API call so it draws with conversation context
+- `EXPRESSION_HISTORY_WINDOW = 6` added to `config.py`
 
-**`src/config.py`**
-- `MAX_HISTORY_TURNS = 20` (was 50)
-- `MAX_SUMMARIES = 10`
-- `SUMMARIES_PATH = "memory/summaries.json"`
+### History trimming
+- History is now trimmed in-memory after each reply (`del history[:len-MAX_HISTORY_TURNS]`)
+- Prevents unbounded context being sent to Claude in long sessions
 
-**`src/memory.py`**
-- `_load_json(path)` — shared helper used by `load_history` and `load_summaries`
-- `load_summaries()` / `save_summary()` — load/append/trim session summaries
-- `build_system_prompt(base, identity, summaries)` — now injects all three tiers
-- `reflect_and_update_identity()` — runs identity reflection and summary generation in **parallel** via `ThreadPoolExecutor(max_workers=2)`
+### Dev tooling
+- `dev.sh` always uses mock server + 5s expression interval + windowed mode
+- `dev.sh` loads `.env` automatically
+- `EXPRESSION_INTERVAL_SECONDS` overridable via env var
+- Mock server returns distinct SVGs: red circle for chat (streaming), green rectangle for expression loop (non-streaming)
 
-**`src/chat.py`** — `run_chat()` loads summaries and passes them to `build_system_prompt`
+### Tests
+- New Docker integration test: `test_expression_loop_fires_without_crashing` — runs Sudo with 2s interval, verifies no crashes
+- `_render_and_save()` helper extracted to remove copy-paste
+- `_base_url()` / `_network_args()` helpers in test_docker.py
 
-**Phase order in docs:**
-- Phase 5: Memory Redesign ✅
-- Phase 6: Microphone (next)
-- Phase 7: Vision
-- Phase 8: Body
-- Phase 9: Autonomy
-
-## Fresh deploy behaviour
-`memory/` is git-ignored. On first run Sudo starts with no identity and no summaries. After the first session it will write both. No seed file — Sudo defines itself from scratch.
-
-## Transferring memory to Pi
-If you want the Pi to have your existing history and identity, just copy the files:
-```bash
-scp memory/history.json memory/identity.md memory/summaries.json sudo@raspberry.local:~/sudo/memory/
-```
-The Pi will load them at next startup.
+## Current state
+- All changes on branch `fix/fullscreen-screen`, PR #8 open
+- 52 unit tests + 5 Docker integration tests all passing
+- Pending Pi verification: fullscreen covers full 480×320, expression loop draws autonomously
 
 ## Next steps (Phase 6: Microphone)
 1. Create `src/audio.py` — `AudioCapture` class using `pyaudio`; `transcribe(audio_path) -> str` using `faster-whisper`
@@ -48,3 +43,8 @@ The Pi will load them at next startup.
 5. `Dockerfile`: add `portaudio19-dev` system package
 6. `tests/test_audio.py`: mocked audio device tests (no real mic in CI)
 7. Use `tiny` or `base` whisper model — `tiny` is faster on Pi, `base` is more accurate
+
+## Transferring memory to Pi
+```bash
+scp memory/history.json memory/identity.md memory/summaries.json sudo@raspberry.local:~/sudo/memory/
+```

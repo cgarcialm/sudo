@@ -68,7 +68,9 @@ Every reply includes a 16×16 pixel grid Sudo paints however it wants. Rendered 
 
 ## Phase 4b: SVG Screen + Autonomous Expression ✅
 
-Replaces the pixel grid with SVG. Sudo has two independent output channels: conversation replies (optionally with `<screen><svg>…</svg></screen>`) and an autonomous expression loop that invites Sudo to draw every 30 seconds. The pygame window opens immediately at startup.
+Replaces the pixel grid with SVG. Sudo has two independent output channels: conversation replies (optionally with `<screen><svg>…</svg></screen>`) and an autonomous expression loop that invites Sudo to draw every 30 seconds. The pygame window opens immediately at startup in fullscreen at native resolution (480×320 on OSOYOO 3.5" display; windowed 320×320 in dev mode via `SCREEN_FULLSCREEN=false`).
+
+`ScreenState` is a thread-safe dataclass shared between the main thread and expression loop. It holds the last rendered SVG and exposes `get_svg()`/`set_svg()` for lock-safe access. Both threads call `_system_with_screen()` to inject the current SVG into the system prompt before each API call — so Sudo always knows what it's showing. The expression loop also snapshots the last 6 history turns (`EXPRESSION_HISTORY_WINDOW`) to draw with conversation context.
 
 ```mermaid
 flowchart LR
@@ -80,19 +82,24 @@ flowchart LR
             InputT["Input thread\n(reads stdin)"]
             ExprT["Expression thread\n(every 30s)"]
         end
+        SS["ScreenState\n(shared SVG + lock)"]
         Screen["ScreenRenderer\n(screen.py)"]
         PNG["memory/screen.png"]
     end
 
     InputT -->|queued line| Main
-    Main -->|HTTPS stream| API["Anthropic API"]
+    Main -->|history + screen context| API["Anthropic API"]
     API --> Claude
     Claude -->|"text + optional &lt;screen&gt;&lt;svg&gt;"| Main
     Main -->|svg string| Screen
-    ExprT -->|HTTPS| API
+    Main -->|set_svg| SS
+    ExprT -->|history snapshot + screen context| API
     Claude -->|"optional &lt;screen&gt;&lt;svg&gt;"| ExprT
     ExprT -->|svg string| Screen
-    Screen -->|cairosvg + blit| Window["pygame window"]
+    ExprT -->|set_svg| SS
+    SS -->|get_svg → injected into system prompt| Main
+    SS -->|get_svg → injected into system prompt| ExprT
+    Screen -->|cairosvg + pygame.transform.scale + blit| Window["pygame window\n(480×320 fullscreen)"]
     Screen --> PNG
     Main -->|tick 20×/sec| Screen
 ```

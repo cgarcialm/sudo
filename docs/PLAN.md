@@ -55,8 +55,11 @@ Sudo also gets two independent output channels and learns about both through its
 - **Two output channels**: ✅
   - Conversation reply (text, optionally includes `<screen><svg>...</svg></screen>`)
   - Autonomous expression loop: background thread wakes every N seconds, asks Sudo "do you want to express something?", renders SVG if yes
-- **System prompt update**: tell Sudo what it is (Pi robot), that it has a physical screen, and that it has both channels available — Sudo learns its own capabilities through context, not hardcoded behavior ✅
+- **System prompt update**: tell Sudo what it is (Pi robot), that it has a physical screen (480×320), and that it has both channels available ✅
 - Loops are independent — conversation never blocks expression and vice versa ✅
+- **Screen context awareness**: `ScreenState` dataclass shared between threads; `_system_with_screen()` injects current SVG into system prompt per call so Sudo knows what it's showing ✅
+- **Expression loop context**: expression loop snapshots last `EXPRESSION_HISTORY_WINDOW=6` history turns before each API call, so it draws with conversation awareness ✅
+- **Fullscreen**: pygame uses `FULLSCREEN` flag at native resolution; `SCREEN_FULLSCREEN=false` env var enables windowed mode for dev/testing ✅
 
 ### Phase 5: Memory Redesign ✅
 Fix three problems: fresh deploys start blank, history window is too large, no continuity between sessions.
